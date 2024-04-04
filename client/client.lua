@@ -68,20 +68,17 @@ local GetBankHours = function()
     Wait(60000) -- every min
 end
 
--- get bank hours on player loading
-RegisterNetEvent('RSGCore:Client:OnPlayerLoaded', function()
-    GetBankHours()
-end)
-
--- update bank hours every min
+-- update shop hourse every min
 CreateThread(function()
     while true do
-        if Config.StoreAlwaysOpen then
-            GetBankHours()
+        if LocalPlayer.state.isLoggedIn then
+            if Config.StoreAlwaysOpen then
+            GetButcherHours()
             Wait(60000) -- every min
+            end
         end
         Wait(1000)
-    end  
+    end
 end)
 
 -- close bank

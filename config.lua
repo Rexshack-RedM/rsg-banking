@@ -8,6 +8,7 @@ Config.StorageMaxSlots = 5
 Config.Keybind = 'J'
 Config.OpenTime = 9 -- hrs : 24hour clock
 Config.CloseTime = 17 -- hrs : 24hour clock
+Config.StoreAlwaysOpen = false
 
 Config.BankLocations = {
     {

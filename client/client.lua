@@ -1,3 +1,4 @@
+local RSGCore = exports['rsg-core']:GetCoreObject()
 local BankOpen = false
 local SpawnedBankBilps = {}
 

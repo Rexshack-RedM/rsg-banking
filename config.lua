@@ -95,5 +95,3 @@ Config.BankDoors = {
     { door = 1366165179, state = 1 }, -- back door
 
 }
-
-RSGCore = exports['rsg-core']:GetCoreObject()

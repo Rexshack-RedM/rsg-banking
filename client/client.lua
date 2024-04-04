@@ -15,7 +15,7 @@ Citizen.CreateThread(function()
             SetBlipSprite(BankingBlip,  joaat(v.blipsprite))
             SetBlipScale(BankingBlip, v.blipscale)
             SetBlipName(BankingBlip, v.name)
-            table.insert(SpawnedBankingBilps, BankingBlip)
+            table.insert(SpawnedBankBilps, BankingBlip)
         end
     end
 end)
@@ -58,10 +58,12 @@ local GetBankHours = function()
     local hour = GetClockHours()
     if (hour < Config.OpenTime) or (hour >= Config.CloseTime) and not Config.StoreAlwaysOpen then
         for k, v in pairs(SpawnedBankBilps) do
+            -- Citizen.InvokeNative(0x662D364ABF16DE2F, v, joaat('BLIP_MODIFIER_MP_COLOR_2'))
             BlipAddModifier(v, joaat('BLIP_MODIFIER_MP_COLOR_2'))
         end
     else
-        for k, v in pairs(SpawnedBankingBilps) do
+        for k, v in pairs(SpawnedBankBilps) do
+            -- Citizen.InvokeNative(0x662D364ABF16DE2F, v, joaat('BLIP_MODIFIER_MP_COLOR_8'))
             BlipAddModifier(v, joaat('BLIP_MODIFIER_MP_COLOR_8'))
         end
     end           

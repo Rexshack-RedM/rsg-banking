@@ -56,7 +56,7 @@ end
 -- get bank hours function
 local GetBankHours = function()
     local hour = GetClockHours()
-    if (hour < Config.OpenTime) or (hour >= Config.CloseTime) then
+    if (hour < Config.OpenTime) or (hour >= Config.CloseTime) and not Config.StoreAlwaysOpen then
         for k, v in pairs(SpawnedBankBilps) do
             BlipAddModifier(v, joaat('BLIP_MODIFIER_MP_COLOR_2'))
         end
@@ -76,9 +76,12 @@ end)
 -- update bank hours every min
 CreateThread(function()
     while true do
-        GetBankHours()
-        Wait(60000) -- every min
-    end       
+        if Config.StoreAlwaysOpen then
+            GetBankHours()
+            Wait(60000) -- every min
+        end
+        Wait(1000)
+    end  
 end)
 
 -- close bank

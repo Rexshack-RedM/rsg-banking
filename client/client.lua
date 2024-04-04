@@ -1,4 +1,3 @@
-local RSGCore = exports['rsg-core']:GetCoreObject()
 local BankOpen = false
 local SpawnedBankBilps = {}
 
@@ -12,11 +11,11 @@ Citizen.CreateThread(function()
             event = 'rsg-banking:client:OpenBanking',
         })
         if v.showblip == true then    
-            local BankBlip = Citizen.InvokeNative(0x554D9D53F696D002, 1664425300, v.coords)
-            SetBlipSprite(BankBlip, joaat(v.blipsprite), true)
-            SetBlipScale(BankBlip, v.blipscale)
-            Citizen.InvokeNative(0x9CB1A1623062F402, BankBlip, v.name)
-            table.insert(SpawnedBankBilps, BankBlip)
+            local BankingBlip = BlipAddForCoords(1664425300, v.coords)
+            SetBlipSprite(BankingBlip,  joaat(v.blipsprite))
+            SetBlipScale(BankingBlip, v.blipscale)
+            SetBlipName(BankingBlip, v.name)
+            table.insert(SpawnedBankingBilps, BankingBlip)
         end
     end
 end)
@@ -24,8 +23,8 @@ end)
 -- set bank door default state
 Citizen.CreateThread(function()
     for _,v in pairs(Config.BankDoors) do
-        Citizen.InvokeNative(0xD99229FE93B46286, v.door, 1, 1, 0, 0, 0, 0)
-        Citizen.InvokeNative(0x6BAB9442830C7F53, v.door, v.state)
+        AddDoorToSystemNew(v.door, 1, 1, 0, 0, 0, 0)
+        DoorSystemSetDoorState(v.door, v.state)
     end
 end)
 
@@ -48,8 +47,8 @@ local OpenBank = function()
             SendNUIMessage({action = "OPEN_BANK", balance = banking})
             SetNuiFocus(true, true)
             BankOpen = true
-            Citizen.InvokeNative(0xFA08722A5EA82DA7, 'RespawnLight')
-            for i=0, 10 do Citizen.InvokeNative(0xFDB74C9CC54C3F37, 0.1 + (i / 10)); Wait(10) end
+            SetTimecycleModifier('RespawnLight')
+            for i = 0, 10 do SetTimecycleModifierStrength(0.1 + (i / 10)); Wait(10) end
         end
     end)
 end
@@ -59,11 +58,11 @@ local GetBankHours = function()
     local hour = GetClockHours()
     if (hour < Config.OpenTime) or (hour >= Config.CloseTime) then
         for k, v in pairs(SpawnedBankBilps) do
-            Citizen.InvokeNative(0x662D364ABF16DE2F, v, joaat('BLIP_MODIFIER_MP_COLOR_2'))
+            BlipAddModifier(v, joaat('BLIP_MODIFIER_MP_COLOR_2'))
         end
     else
-        for k, v in pairs(SpawnedBankBilps) do
-            Citizen.InvokeNative(0x662D364ABF16DE2F, v, joaat('BLIP_MODIFIER_MP_COLOR_8'))
+        for k, v in pairs(SpawnedBankingBilps) do
+            BlipAddModifier(v, joaat('BLIP_MODIFIER_MP_COLOR_8'))
         end
     end           
     Wait(60000) -- every min
@@ -87,8 +86,8 @@ local CloseBank = function()
     SendNUIMessage({action = "CLOSE_BANK"})
     SetNuiFocus(false, false)
     BankOpen = false
-    for i=1, 10 do Citizen.InvokeNative(0xFDB74C9CC54C3F37, 1.0 - (i / 10)); Wait(15) end
-    Citizen.InvokeNative(0x0E3F4AF2D63491FB)
+    for i = 1, 10 do SetTimecycleModifierStrength(1.0 - (i / 10)); Wait(15) end
+    ClearTimecycleModifier()
 end
 
 RegisterNUICallback('CloseNUI', function()
@@ -119,8 +118,8 @@ RegisterNetEvent('rsg-banking:client:safedeposit', function()
     RSGCore.Functions.GetPlayerData(function(PlayerData)
         local cid = PlayerData.citizenid
         local ZoneTypeId = 1
-        local x,y,z =  table.unpack(GetEntityCoords(PlayerPedId()))
-        local town = Citizen.InvokeNative(0x43AD8FC02B429D33, x,y,z, ZoneTypeId)
+        local x, y, z =  table.unpack(GetEntityCoords(cache.ped))
+        local town = GetMapZoneAtCoords( x, y, z, ZoneTypeId)
 
         if town == -744494798 then
             town = 'Armadillo'

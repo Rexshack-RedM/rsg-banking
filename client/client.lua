@@ -1,5 +1,6 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
 local BankOpen = false
+local bankID;
 local SpawnedBankBilps = {}
 lib.locale()
 
@@ -10,10 +11,15 @@ CreateThread(function()
     for _,v in pairs(Config.BankLocations) do
         if Config.UseTarget then
         else
+            if Config.OneBank then
+                bankID = 'bank'
+            else
+                bankID = v.bankid
+            end
             exports['rsg-core']:createPrompt(v.bankid, v.coords, RSGCore.Shared.Keybinds[Config.Keybind], locale('cl_lang_1'), {
                 type = 'client',
                 event = 'rsg-banking:client:OpenBanking',
-                args = { v.bankid },
+                args = { bankID },
             })
         end
         if v.showblip == true then
@@ -25,6 +31,7 @@ CreateThread(function()
         end
     end
 end)
+
 
 ---------------------------------
 -- set bank door default state
@@ -161,4 +168,6 @@ RegisterNetEvent('rsg-banking:client:safedeposit', function()
     end
 
     TriggerServerEvent('rsg-banking:server:opensafedeposit', town)
+end)
+    end
 end)

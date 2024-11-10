@@ -14,6 +14,7 @@ Config.OpenTime   = 9 -- hrs : 24hour clock
 Config.CloseTime  = 17 -- hrs : 24hour clock
 Config.AlwaysOpen = true -- sets bank always open if set to true
 Config.UseTarget  = false
+Config.OneBank = false -- turn to true to use one banking in the server.
 
 ---------------------------------
 -- bank locations

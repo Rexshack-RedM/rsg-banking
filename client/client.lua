@@ -169,5 +169,3 @@ RegisterNetEvent('rsg-banking:client:safedeposit', function()
 
     TriggerServerEvent('rsg-banking:server:opensafedeposit', town)
 end)
-    end
-end)

@@ -2,6 +2,7 @@ local RSGCore = exports['rsg-core']:GetCoreObject()
 local banking = nil
 lib.locale()
 math = lib.math
+local SendDiscordWebhook = require('server.discord_webhook')
 
 ---------------
 -- stash
@@ -24,27 +25,13 @@ RSGCore.Functions.CreateCallback('rsg-banking:getBankingInformation', function(s
     local Player = RSGCore.Functions.GetPlayer(source)
     if not Player then return cb(nil) end
 
-    if moneytype == 'bank' then
-        banking = tonumber(Player.PlayerData.money['bank'])
+    local banking = nil
+    local cash = Player.Functions.GetMoney('cash')
+    if Player.PlayerData.money[moneytype] then
+        banking = tonumber(Player.PlayerData.money[moneytype])
     end
 
-    if moneytype == 'valbank' then
-        banking = tonumber(Player.PlayerData.money['valbank'])
-    end
-
-    if moneytype == 'rhobank' then
-        banking = tonumber(Player.PlayerData.money['rhobank'])
-    end
-
-    if moneytype == 'blkbank' then
-        banking = tonumber(Player.PlayerData.money['blkbank'])
-    end
-
-    if moneytype == 'armbank' then
-        banking = tonumber(Player.PlayerData.money['armbank'])
-    end
-
-    cb(banking)
+    cb({bank = banking, cash = cash})
 end)
 
 ---------------------------------
@@ -52,7 +39,7 @@ end)
 ---------------------------------
 RegisterNetEvent('rsg-banking:server:transact', function(type, amount, moneytype)
     local src = source
-    local Player = RSGCore.Functions.GetPlayer(source)
+    local Player = RSGCore.Functions.GetPlayer(src)
     local currentCash = Player.Functions.GetMoney('cash')
     local currentBank = Player.Functions.GetMoney(moneytype)
 
@@ -75,6 +62,12 @@ RegisterNetEvent('rsg-banking:server:transact', function(type, amount, moneytype
             Player.Functions.AddMoney('cash', amount, 'bank-withdraw')
             local newBankBalance = Player.Functions.GetMoney(moneytype)
             TriggerClientEvent('rsg-banking:client:UpdateBanking', src, newBankBalance, moneytype)
+            
+            -- Discord webhook for withdrawals
+            if Config.Discord.TrackWithdrawals and amount >= Config.Discord.TransactionThreshold then
+                local playerName = Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname
+                SendDiscordWebhook(playerName, "Bank (" .. moneytype .. ")", amount, "Withdrawal")
+            end
         else
             lib.notify(src, {title = locale('sv_lang_2'), type = 'error'})
         end
@@ -87,6 +80,12 @@ RegisterNetEvent('rsg-banking:server:transact', function(type, amount, moneytype
             Player.Functions.AddMoney(moneytype, tonumber(amount), 'bank-deposit')
             local newBankBalance = Player.Functions.GetMoney(moneytype)
             TriggerClientEvent('rsg-banking:client:UpdateBanking', src, newBankBalance, moneytype)
+            
+            -- Discord webhook for deposits
+            if Config.Discord.TrackDeposits and amount >= Config.Discord.TransactionThreshold then
+                local playerName = Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname
+                SendDiscordWebhook(playerName, "Bank (" .. moneytype .. ")", amount, "Deposit")
+            end
         else
             lib.notify(src, {title = locale('sv_lang_2'), type = 'error'})
         end
@@ -100,7 +99,13 @@ RegisterNetEvent('rsg-banking:server:transact', function(type, amount, moneytype
             Player.Functions.AddItem('money_clip', 1, false, info)
             local newBankBalance = Player.Functions.GetMoney(moneytype)
             TriggerClientEvent('rsg-banking:client:UpdateBanking', src, newBankBalance, moneytype)
-            lib.notify({ title = locale('sv_lang_9'), description = locale('sv_lang_10') .. ' ' .. amount .. ' ' .. locale('sv_lang_11'), type = 'success' })
+            lib.notify(src, { title = locale('sv_lang_9'), description = locale('sv_lang_10') .. ' ' .. amount .. ' ' .. locale('sv_lang_11'), type = 'success' })
+            
+            -- Discord webhook for money clip creation
+            if Config.Discord.TrackMoneyClips and amount >= Config.Discord.TransactionThreshold then
+                local playerName = Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname
+                SendDiscordWebhook(playerName, "Money Clip", amount, "Money Clip Created")
+            end
         else
             lib.notify(src, {title = locale('sv_lang_2'), type = 'error'})
         end
@@ -224,6 +229,13 @@ RegisterNetEvent('rsg-banking:server:givemoney', function(targetPlayerId, amount
         targetPlayer.Functions.AddMoney('cash', amount)
         TriggerClientEvent('lib.notify', Player.PlayerData.source, { title = locale('sv_lang_21'), description = locale('sv_lang_22') .. amount .. locale('sv_lang_23') .. targetPlayer.PlayerData.charinfo.firstname, type = 'success' })
         TriggerClientEvent('lib.notify', targetPlayer.PlayerData.source, { title = locale('sv_lang_21'), description = locale('sv_lang_24') .. amount .. locale('sv_lang_25') .. Player.PlayerData.charinfo.firstname, type = 'success' })
+        
+        -- Discord webhook for large transactions
+        if Config.Discord.TrackTransfers and amount >= Config.Discord.TransactionThreshold then
+            local senderName = Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname
+            local receiverName = targetPlayer.PlayerData.charinfo.firstname .. " " .. targetPlayer.PlayerData.charinfo.lastname
+            SendDiscordWebhook(senderName, receiverName, amount, "Player to Player Transfer")
+        end
     else
         TriggerClientEvent('lib.notify', Player.PlayerData.source, { title = locale('sv_lang_18'), description = locale('sv_lang_26'), type = 'error' })
     end

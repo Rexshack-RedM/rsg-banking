@@ -22,5 +22,16 @@
     "sv_lang_14" : "Crea Fermasoldi Sporco",
     "sv_lang_15" : "Quanto denaro sporco vuoi convertire?",
     "sv_lang_16" : "Fermasoldi Denaro Sporco Convertito",
-    "sv_lang_17" : " denaro sporco in un fermasoldi!"
+    "sv_lang_17" : " denaro sporco in un fermasoldi!",
+    "ui_bank_account" : "Conto Bancario",
+    "ui_banking" : "Banca",
+    "ui_cash_on_hand" : "Contanti in Mano",
+    "ui_withdraw" : "Preleva",
+    "ui_deposit" : "Deposita",
+    "ui_create_moneyclip" : "Crea Fermasoldi",
+    "ui_safe_deposit_box" : "Cassetta di Sicurezza",
+    "ui_close" : "Chiudi",
+    "ui_current_balance" : "Saldo Attuale",
+    "ui_back" : "Indietro",
+    "ui_amount_placeholder" : "$ Importo"
 }

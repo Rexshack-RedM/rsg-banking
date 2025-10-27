@@ -22,5 +22,16 @@
     "sv_lang_14" : "Crear Clip de Dinero Sucio",
     "sv_lang_15" : "¿Cuánto dinero sucio quieres convertir?",
     "sv_lang_16" : "Clip de Dinero Sucio Convertido",
-    "sv_lang_17" : " dinero sucio en un Clip de Dinero!"
+    "sv_lang_17" : " dinero sucio en un Clip de Dinero!",
+    "ui_bank_account" : "Cuenta Bancaria",
+    "ui_banking" : "Banco",
+    "ui_cash_on_hand" : "Efectivo en Mano",
+    "ui_withdraw" : "Retirar",
+    "ui_deposit" : "Depositar",
+    "ui_create_moneyclip" : "Crear Clip de Dinero",
+    "ui_safe_deposit_box" : "Caja de Seguridad",
+    "ui_close" : "Cerrar",
+    "ui_current_balance" : "Saldo Actual",
+    "ui_back" : "Atrás",
+    "ui_amount_placeholder" : "$ Cantidad"
 }

@@ -22,5 +22,16 @@
     "sv_lang_14" : "Creaza Clip pentru Bani Sangvineti",
     "sv_lang_15" : "Cata suma de bani sangvineti vrea sa converteasca?",
     "sv_lang_16" : "Clip pentru Bani Sangvineti Convertit",
-    "sv_lang_17" : " bani sangvineti in Clip pentru Bani!"
+    "sv_lang_17" : " bani sangvineti in Clip pentru Bani!",
+    "ui_bank_account" : "Cont Bancar",
+    "ui_banking" : "Bancar",
+    "ui_cash_on_hand" : "Bani în Mână",
+    "ui_withdraw" : "Retrage",
+    "ui_deposit" : "Depune",
+    "ui_create_moneyclip" : "Creează Clip pentru Bani",
+    "ui_safe_deposit_box" : "Seif pentru Depozite",
+    "ui_close" : "Închide",
+    "ui_current_balance" : "Sold Curent",
+    "ui_back" : "Înapoi",
+    "ui_amount_placeholder" : "$ Sumă"
 }

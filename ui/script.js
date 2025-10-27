@@ -10,9 +10,17 @@ window.addEventListener("message", (event) => {
     switch (action) {
         case "OPEN_BANK":
             withdrawChargeRate = event.data.withdrawChargeRate
-            $(".balance").html(event.data.balance.toFixed(2).toLocaleString('en-US', { 
+            $(".balance").html(event.data.balance.toLocaleString('en-US', { 
                 style: 'currency', 
-                currency: 'USD' 
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }));
+            $(".cash").html(event.data.cash.toLocaleString('en-US', { 
+                style: 'currency', 
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
             }));
             $("#bankmenu").fadeIn(200);
             break;
@@ -20,9 +28,17 @@ window.addEventListener("message", (event) => {
             $("#bankmenu").fadeOut(200);
             break;
         case "UPDATE_BALANCE":
-            $(".balance").html(event.data.balance.toFixed(2).toLocaleString('en-US', {
+            $(".balance").html(event.data.balance.toLocaleString('en-US', {
                 style: 'currency',
-                currency: 'USD'
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }));
+            $(".cash").html(event.data.cash.toLocaleString('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
             }));
             break;
         default:
@@ -38,11 +54,6 @@ $(".close").click(function() {
 $(".safedeposit").click(function() {
     $("#bankmenu").fadeOut(200);
     $.post(`https://${GetParentResourceName()}/SafeDeposit`);
-});
-
-$(".moneyclip").click(function() {
-    $("#bankmenu").fadeOut(200);
-    $.post(`https://${GetParentResourceName()}/MoneyClip`);
 });
 
 $(".withdraw").click(function() {
@@ -76,6 +87,7 @@ $(".moneyclip").click(function() {
         $("#transactionmenu").fadeIn(200);
         $("#transhead").html("Create Moneyclip");
         $(".transact").html("Create");
+        $(".charge").html('');
     });
 });
 

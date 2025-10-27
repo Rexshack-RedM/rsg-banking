@@ -35,5 +35,16 @@
     "sv_lang_23" : " to ",
     "sv_lang_24" : "You received $",
     "sv_lang_25" : " from ",
-    "sv_lang_26" : "You don't have enough money."
+    "sv_lang_26" : "You don't have enough money.",
+    "ui_bank_account" : "Bank Account",
+    "ui_banking" : "Banking",
+    "ui_cash_on_hand" : "Cash on Hand",
+    "ui_withdraw" : "Withdraw",
+    "ui_deposit" : "Deposit",
+    "ui_create_moneyclip" : "Create Moneyclip",
+    "ui_safe_deposit_box" : "Safe Deposit Box",
+    "ui_close" : "Close",
+    "ui_current_balance" : "Current Balance",
+    "ui_back" : "Back",
+    "ui_amount_placeholder" : "$ Amount"
 }

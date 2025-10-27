@@ -27,10 +27,12 @@
 - 🕒 **Open/close hours** with “Bank Closed” message when outside hours.  
 - 📦 **Safe Deposit Box** (weight/slots configurable) per character & town.  
 - 💸 **Withdraw / Deposit** (optional withdraw fee).  
+- 💰 **Cash on Hand display** — shows player’s current cash balance in the bank UI.  
 - 💵 **Make & use Money Clips** (cash) and **Blood Money Clips** (bloodmoney).  
 - 🤝 **Give Money** to a chosen PlayerID (with validation & notifications).  
+- 🔔 **Discord Webhook Logging** — tracks withdrawals, deposits, transfers, and money clips with role mentions for high-value transactions.  
 - 🚪 **Bank door presets** (vault/inner door states) applied on client.  
-- 🌍 **Multi‑language** via `ox_lib.locale()` and NUI.  
+- 🌍 **Multi‑language** via `ox_lib.locale()` and NUI.
 
 ---
 
@@ -56,6 +58,24 @@ Config.UseTarget  = false -- use rsg-core prompts if false
 
 -- Optional fee when withdrawing (percent)
 Config.WithdrawChargeRate = 0
+```
+
+### Discord Webhook Configuration (`server/discord_webhook.lua`)
+```lua
+Config.Discord = {
+    WebhookURL = "", -- Add your Discord webhook URL here
+    RoleID = "",     -- Discord role ID to mention for high-value transactions
+    Enabled = true,
+    TransactionThreshold = 0,    -- Minimum amount to log (0 = log all)
+    RoleMentionThreshold = 1000, -- Minimum amount to trigger role mention
+    Color = 16711680,            -- Embed color (decimal format)
+    
+    -- Track specific transaction types
+    TrackWithdrawals = true,
+    TrackDeposits = true,
+    TrackTransfers = true,
+    TrackMoneyClips = true,
+}
 ```
 
 ### Bank locations
@@ -111,7 +131,39 @@ blood_money_clip = { name = 'blood_money_clip', label = 'Blood Money Clip',  wei
 
 ---
 
-## 📂 Installation
+## 🔔 Discord Webhook Setup
+
+1. Create a webhook in your Discord server:
+   - Go to **Server Settings** > **Integrations** > **Webhooks**
+   - Click **New Webhook** and copy the webhook URL
+
+2. Edit `server/discord_webhook.lua`:
+   ```lua
+   Config.Discord = {
+       WebhookURL = "https://discord.com/api/webhooks/YOUR_WEBHOOK_URL",
+       RoleID = "1234567890123456789", -- Optional: Role to mention for high-value transactions
+       Enabled = true,
+       TransactionThreshold = 0,    -- Set to minimum $ to log (0 = all)
+       RoleMentionThreshold = 1000, -- $ amount to trigger role ping
+   }
+   ```
+
+3. **Transaction Types Tracked:**
+   - 💸 **Withdrawals** (red embed)
+   - 💵 **Deposits** (green embed)
+   - 🤝 **Player-to-Player Transfers** (blue embed)
+   - 📎 **Money Clip Creation** (gold embed)
+
+4. Each webhook includes:
+   - Player name(s)
+   - Transaction amount (formatted with commas)
+   - Transaction type
+   - Timestamp
+   - 🚨 **High-value alert** with role mention when amount exceeds `RoleMentionThreshold`
+
+---
+
+## 📋 Installation
 1. Add `rsg-banking` to `resources/[rsg]`.  
 2. Ensure `rsg-core`, `ox_lib`, and `rsg-inventory` are installed.  
 3. (Optional) Add item images to your inventory UI (`money_clip.png`, `blood_money_clip.png`).  
@@ -141,7 +193,12 @@ blood_money_clip = { name = 'blood_money_clip', label = 'Blood Money Clip',  wei
   "sv_lang_9": "Converted",
   "sv_lang_12": "You took out",
   "sv_lang_14": "Make Blood Money Clip",
-  "sv_lang_16": "Blood Money Clip Converted"
+  "sv_lang_16": "Blood Money Clip Converted",
+  "ui_bank_account": "Bank Account",
+  "ui_banking": "Banking",
+  "ui_cash_on_hand": "Cash on Hand",
+  "ui_withdraw": "Withdraw",
+  "ui_deposit": "Deposit"
 }
 ```
 

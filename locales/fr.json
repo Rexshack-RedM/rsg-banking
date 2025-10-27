@@ -22,5 +22,16 @@
     "sv_lang_14" : "Créer une pince à billets en argent sale",
     "sv_lang_15" : "Combien d'argent sale souhaitez-vous convertir ?",
     "sv_lang_16" : "Pince à billets en argent sale convertie",
-    "sv_lang_17" : " d'argent sale en une pince à billets !"
+    "sv_lang_17" : " d'argent sale en une pince à billets !",
+    "ui_bank_account" : "Compte Bancaire",
+    "ui_banking" : "Banque",
+    "ui_cash_on_hand" : "Argent en Main",
+    "ui_withdraw" : "Retirer",
+    "ui_deposit" : "Déposer",
+    "ui_create_moneyclip" : "Créer Pince à Billets",
+    "ui_safe_deposit_box" : "Coffre-fort",
+    "ui_close" : "Fermer",
+    "ui_current_balance" : "Solde Actuel",
+    "ui_back" : "Retour",
+    "ui_amount_placeholder" : "$ Montant"
 }

@@ -1,6 +1,6 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
 local BankOpen = false
-local SpawnedBankBilps = {}
+local SpawnedBankBlips = {}
 lib.locale()
 
 ---------------------------------
@@ -20,7 +20,7 @@ CreateThread(function()
             SetBlipSprite(BankBlip, joaat(v.blipsprite), true)
             SetBlipScale(BankBlip, v.blipscale)
             SetBlipName(BankBlip, v.name)
-            table.insert(SpawnedBankBilps, BankBlip)
+            table.insert(SpawnedBankBlips, BankBlip)
         end
     end
 end)
@@ -48,7 +48,7 @@ local OpenBank = function(moneytype)
     end
     RSGCore.Functions.TriggerCallback('rsg-banking:getBankingInformation', function(banking)
         if banking ~= nil then
-            SendNUIMessage({action = "OPEN_BANK", balance = banking, id = moneytype, withdrawChargeRate = Config.WithdrawChargeRate or 0})
+            SendNUIMessage({action = "OPEN_BANK", balance = banking.bank, cash = banking.cash, id = moneytype, withdrawChargeRate = Config.WithdrawChargeRate or 0})
             SetNuiFocus(true, true)
             BankOpen = true
             SetTimecycleModifier('RespawnLight')
@@ -64,16 +64,16 @@ local GetBankHours = function()
     local hour = GetClockHours()
     if not Config.AlwaysOpen then
         if (hour < Config.OpenTime) or (hour >= Config.CloseTime) then
-            for k, v in pairs(SpawnedBankBilps) do
+            for k, v in pairs(SpawnedBankBlips) do
                 BlipAddModifier(v, joaat('BLIP_MODIFIER_MP_COLOR_2'))
             end
         else
-            for k, v in pairs(SpawnedBankBilps) do
+            for k, v in pairs(SpawnedBankBlips) do
                 BlipAddModifier(v, joaat('BLIP_MODIFIER_MP_COLOR_8'))
             end
         end
     else
-        for k, v in pairs(SpawnedBankBilps) do
+        for k, v in pairs(SpawnedBankBlips) do
             BlipAddModifier(v, joaat('BLIP_MODIFIER_MP_COLOR_8'))
         end
     end
@@ -132,7 +132,9 @@ end)
 ---------------------------------
 RegisterNetEvent('rsg-banking:client:UpdateBanking', function(newbalance, moneytype)
     if not BankOpen then return end
-    SendNUIMessage({action = "UPDATE_BALANCE", balance = newbalance, id = moneytype})
+    local Player = RSGCore.Functions.GetPlayerData()
+    local cash = Player.money['cash']
+    SendNUIMessage({action = "UPDATE_BALANCE", balance = newbalance, cash = cash, id = moneytype})
 end)
 
 ---------------------------------
@@ -172,8 +174,6 @@ exports['ox_target']:addGlobalPlayer({
         icon = 'fas fa-money-bill-wave',
         onSelect = function(data)
             local targetEntity = data.entity
-            local targetPlayerIndex = NetworkGetPlayerIndexFromPed(targetEntity)
-            local targetServerId = GetPlayerServerId(targetPlayerIndex)
             if IsEntityAPed(targetEntity) and IsPedAPlayer(targetEntity) then
                 local targetPlayerIndex = NetworkGetPlayerIndexFromPed(targetEntity)
                 local targetServerId = GetPlayerServerId(targetPlayerIndex)

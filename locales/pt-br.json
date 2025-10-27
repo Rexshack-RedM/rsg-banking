@@ -35,5 +35,16 @@
     "sv_lang_23" : " para ",
     "sv_lang_24" : "Você recebeu $",
     "sv_lang_25" : " de ",
-    "sv_lang_26" : "Você não tem dinheiro suficiente."
+    "sv_lang_26" : "Você não tem dinheiro suficiente.",
+    "ui_bank_account" : "Conta Bancária",
+    "ui_banking" : "Banco",
+    "ui_cash_on_hand" : "Dinheiro em Mãos",
+    "ui_withdraw" : "Sacar",
+    "ui_deposit" : "Depositar",
+    "ui_create_moneyclip" : "Criar Maço de Dinheiro",
+    "ui_safe_deposit_box" : "Cofre",
+    "ui_close" : "Fechar",
+    "ui_current_balance" : "Saldo Atual",
+    "ui_back" : "Voltar",
+    "ui_amount_placeholder" : "$ Quantia"
 }

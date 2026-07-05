@@ -177,7 +177,7 @@ exports['ox_target']:addGlobalPlayer({
             if IsEntityAPed(targetEntity) and IsPedAPlayer(targetEntity) then
                 local targetPlayerIndex = NetworkGetPlayerIndexFromPed(targetEntity)
                 local targetServerId = GetPlayerServerId(targetPlayerIndex)
-            
+
                 if targetServerId and targetServerId > 0 then
                     OpenGiveMoneyMenu(targetServerId)
                 else
@@ -213,4 +213,10 @@ function OpenGiveMoneyMenu(targetPlayerId)
     else
         lib.notify({ title = locale('cl_lang_10'), type = 'error' })
     end
+end
+
+if Config.UseGMInventory then
+    RegisterNetEvent("rsg-banking:client:closeInventory", function()
+        exports.gm_inventory:closeInventory()
+    end)
 end

@@ -105,7 +105,7 @@ RegisterNetEvent('rsg-banking:server:transact', function(type, amount, moneytype
             return
         end
         local bankRemove = amount
-        if Config.WithdrawChargeRate and Config.WithdrawChargeRate > 0 then 
+        if Config.WithdrawChargeRate and Config.WithdrawChargeRate > 0 then
             local charge = amount * (Config.WithdrawChargeRate / 100)
             bankRemove = math.round(amount + charge, 2)
         end
@@ -174,6 +174,94 @@ RegisterNetEvent('rsg-banking:server:transact', function(type, amount, moneytype
 
 end)
 
+if Config.UseGMInventory then
+    RegisterNetEvent("rsg-banking:server:getMoneyClip", function(input)
+        local src = source
+        input = tonumber(input) -- Convert input to a number
+
+        if not input or input <= 0 then
+            lib.notify(src, {title = locale('sv_lang_27'), type = 'error'})
+            return
+        end
+
+        local Player = RSGCore.Functions.GetPlayer(src)
+        local charName = Player.PlayerData.charinfo.firstname.. ' ' .. Player.PlayerData.charinfo.lastname
+
+        if not Player then return end
+
+        local money = Player.Functions.GetMoney('cash')
+
+        if money and money >= input then
+            if exports.gm_inventory:CanCarryItem(src, "money_clip", 1) then
+                if Player.Functions.RemoveMoney('cash', input, 'give-money') then
+                    local info =
+                    {
+                        money = input
+                    }
+
+                    TriggerEvent('rsg-log:server:CreateLog', 'create-money-clip', 'Create Own Money Clip', 'green',
+                        '**Player name**: ' .. GetPlayerName(src) ..
+                        "\n **Character Name:** " .. charName ..
+                        '\n **Player ID**: ' .. src ..
+                        "\n **Amount**: " .. string.format("%.2f", input)
+                    , false)
+                    Player.Functions.AddItem('money_clip', 1, false, info)
+                    lib.notify(src, {title = locale('sv_lang_28') .. string.format("%.2f", input) .. locale('sv_lang_29'), type = 'success'})
+                    TriggerClientEvent("rsg-banking:client:closeInventory", src)
+                end
+            else
+                TriggerClientEvent('RSGCore:Notify', src, "Your inventory is full", 'warning', 4500)
+            end
+        end
+    end)
+
+    RegisterNetEvent("rsg-banking:server:getOthersMoneyClip", function(id, input)
+        local src = source
+        local id = id
+        input = tonumber(input) -- Convert input to a number
+    
+        if not input or input <= 0 then
+            RSGCore.Functions.Notify(src, locale('sv_lang_27'), 'error')
+            return
+        end
+    
+        local Player = RSGCore.Functions.GetPlayer(src)
+        local charName = Player.PlayerData.charinfo.firstname.. ' ' .. Player.PlayerData.charinfo.lastname
+    
+        local otherPlayer = RSGCore.Functions.GetPlayer(id)
+        local otherCharName = otherPlayer.PlayerData.charinfo.firstname.. ' ' .. otherPlayer.PlayerData.charinfo.lastname
+    
+        if not Player then return end
+        if not otherPlayer then return end
+    
+        local money = otherPlayer.Functions.GetMoney('cash')
+    
+        if money and money >= input then
+            if otherPlayer.Functions.RemoveMoney('cash', input, 'give-money') then
+                local info =
+                {
+                    money = input
+                }
+    
+                TriggerEvent('rsg-log:server:CreateLog', 'create-money-clip', 'Create Stolen Money Clip', 'green',
+                    '**Player name**: ' .. GetPlayerName(src) ..
+                    '\n **Player ID**: ' .. src ..
+                    "\n **Character Name:** " .. charName ..
+                    "\n **Amount**: " .. string.format("%.2f", input) ..
+                    "\n **Stole money from**" ..
+                    "\n **Player Name**: " .. GetPlayerName(id) ..
+                    "\n **Character Name**: " .. otherCharName ..
+                    "\n **Player ID**: " .. id
+                , false)
+    
+                Player.Functions.AddItem('money_clip', 1, false, info)
+                lib.notify(src, {title = locale('sv_lang_28') .. string.format("%.2f", input) .. locale('sv_lang_29'), type = 'success'})
+                TriggerClientEvent("rsg-banking:client:closeInventory", src)
+            end
+        end
+    end)
+end
+
 ---------------------------------
 -- money clip made usable
 ---------------------------------
@@ -189,6 +277,10 @@ RSGCore.Functions.CreateUseableItem('money_clip', function(source, item)
     if Player.Functions.RemoveItem(item.name, 1, item.slot) then
         Player.Functions.AddMoney('cash', amount)
         lib.notify({ title = locale('sv_lang_3'), description = locale('sv_lang_4') ..' ' .. amount .. ' ' .. locale('sv_lang_5'), type = 'success' })
+    end
+
+    if Config.UseGMInventory then
+        TriggerClientEvent("rsg-banking:client:closeInventory", src)
     end
 end)
 
@@ -287,7 +379,7 @@ RegisterNetEvent('rsg-banking:server:givemoney', function(targetPlayerId, amount
     end
     local Player = RSGCore.Functions.GetPlayer(src)
     local targetPlayer = RSGCore.Functions.GetPlayer(targetId)
-    
+
     if not Player then
         TriggerClientEvent('lib.notify', src, { title = locale('sv_lang_18'), description = locale('sv_lang_19'), type = 'error' })
         return

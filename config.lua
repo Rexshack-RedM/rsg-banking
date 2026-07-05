@@ -20,6 +20,7 @@ Config.OpenTime   = 9 -- hrs : 24hour clock
 Config.CloseTime  = 17 -- hrs : 24hour clock
 Config.AlwaysOpen = true -- sets bank always open if set to true
 Config.UseTarget  = false
+Config.UseGMInventory = true
 
 Config.WithdrawChargeRate = 0 -- Charge of withdrawing money. Example: if set to 10, when withdrawing 100$, additional 10$ is charged
 Config.MaxWithdraw = 10000
@@ -63,7 +64,7 @@ Config.BankLocations = {
         npcmodel = 'S_M_M_BankClerk_01',
         npccoords = vector4(2644.75, -1294.15, 52.25, 17.11),
         showblip = true,
-        blipsprite = 'blip_proc_bank', 
+        blipsprite = 'blip_proc_bank',
         blipscale = 0.2
     },
     {
@@ -74,7 +75,7 @@ Config.BankLocations = {
         npcmodel = 'S_M_M_BankClerk_01',
         npccoords = vector4(-813.2, -1275.38, 43.64, 173.1),
         showblip = true,
-        blipsprite = 'blip_proc_bank', 
+        blipsprite = 'blip_proc_bank',
         blipscale = 0.2
     },
     {
@@ -85,7 +86,7 @@ Config.BankLocations = {
         npcmodel = 'S_M_M_BankClerk_01',
         npccoords = vector4(-3666.28, -2628.69, -13.59, 359.78),
         showblip = true,
-        blipsprite = 'blip_proc_bank', 
+        blipsprite = 'blip_proc_bank',
         blipscale = 0.2
     },
 }
@@ -127,7 +128,7 @@ Config.BankDoors = {
     { door = 2117902999, state = 1 }, -- inner door
     { door = 2817192481, state = 1 }, -- manager door
     { door = 1462330364, state = 1 }, -- vault door
-    
+
     -- armadillo
     { door = 3101287960, state = 0 }, -- main door
     { door = 3550475905, state = 1 }, -- inner door

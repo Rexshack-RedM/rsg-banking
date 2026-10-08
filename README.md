@@ -7,6 +7,8 @@ Branch banking for RSG-Core (RedM). Every town bank is its own institution: mone
 - Players open an account at each branch before using it (optional cash fee)
 - Deposit, withdraw, wire between your own branches (percentage fee with minimum)
 - Branch overview and per-branch ledger
+- **Loans**: borrow from a branch, repay from the vault or in cash, late penalty and automatic collection when overdue
+- **Vault lockboxes**: rent a small / medium / large safe-deposit box per branch for whitelisted items (e.g. gold bars); the small box can be enlarged for a fee
 - Opening hours: map blips turn green/red, main doors unlock/lock, menu closes at closing time
 - Automatic database setup (or manual SQL)
 - Draggable UI that remembers its position (double-click the header to re-centre)
@@ -16,6 +18,7 @@ Branch banking for RSG-Core (RedM). Every town bank is its own institution: mone
 - rsg-core
 - ox_lib
 - oxmysql
+- rsg-inventory (for lockboxes)
 - OneSync (used for the server-side distance check)
 
 ## Installation
@@ -42,6 +45,31 @@ Branch banking for RSG-Core (RedM). Every town bank is its own institution: mone
 | `Blip` | Sprite, scale, open/closed colours, update interval |
 | `Banks` | Branch ids, labels and counter coordinates |
 | `BankDoors` | Door hashes; `state = 0` follows opening hours, `1` always locked |
+| `Loans` | Loan limits, interest, term, late penalty, auto-collection (see below) |
+| `Lockbox` | Lockbox sizes, prices, upgrade, payment method and allowed items (see below) |
+
+## Loans (`Config.Loans`)
+- A player borrows at the counter they are standing at; the money is paid into that branch account.
+- Interest is flat and added up front (`interestPercent`). The loan must be repaid at the **same branch** within `termDays` real days, from that branch vault or in cash. Part payments are allowed.
+- `maxActive` limits open loans across all branches (default 1). `minAccountHours` can require the account to be a certain age first.
+- Overdue loans get a one-off `latePenaltyPercent` charge. With `autoCollect = true` the bank then takes what it can from the player's branch balances (loan branch first) every `checkInterval` minutes, online or offline.
+- Loan money that has been withdrawn as cash cannot be auto-collected; only branch balances are.
+
+## Vault lockboxes (`Config.Lockbox`)
+- One lockbox per player per branch. Capacity is a total item count (25 = 25 gold bars).
+- `sizes` sets the label, capacity and price of `small`, `medium` and `large`.
+- `upgrade` lets the **small** box grow by `step` slots for `price` each, up to `maxSteps` times.
+- `payWith = 'bank'` charges the branch vault (shown in the ledger); `'cash'` charges cash.
+- Only items listed in `items` can be stored, and they must exist in RSG-Core's shared items:
+  ```lua
+  items = {
+      resource_gold_bar   = true,
+      resource_silver_bar = true,
+  },
+  ```
+- Items are stored by name and count, so item metadata (durability, serials, etc.) is not kept. Only whitelist plain stackable items.
+- Removing an item from the whitelist stops new deposits, but players can still take out what they already stored.
+- Item images load from `imagePath` (rsg-inventory's image folder by default).
 
 ## Closing time
 - Players inside a bank get a warning `Closing.warnHours` before closing.
@@ -55,6 +83,11 @@ exports['rsg-banking']:GetBranchBalance(citizenid, bankId)          -- number
 exports['rsg-banking']:GetTotalBalance(citizenid)                   -- number (all branches)
 exports['rsg-banking']:AddBranchMoney(citizenid, bankId, amount, note)    -- bool (false if no account)
 exports['rsg-banking']:RemoveBranchMoney(citizenid, bankId, amount, note) -- bool (false if insufficient)
+exports['rsg-banking']:GetHomeBranch(citizenid)                     -- bankId or nil
+exports['rsg-banking']:AddHomeMoney(citizenid, amount, note)        -- bankId or false (pays into the home branch)
+exports['rsg-banking']:GetLoans(citizenid)                          -- { { bank, principal, owed, late, due }, ... }
+exports['rsg-banking']:HasActiveLoan(citizenid)                     -- bool
+exports['rsg-banking']:GetLockboxItems(citizenid, bankId)           -- { [item] = amount }
 ```
 
 ## Notes
@@ -74,8 +107,10 @@ All webhook settings live in `server/sv_config.lua`, which is **server-only** an
 | `deposit` / `withdraw` | Cash moved in or out (amount, new balance) |
 | `transfer` | Wire between branches (from, to, amount, fee, total) |
 | `large` | Any deposit, withdrawal or wire at or above `largeAmount`; can ping a role via `largeMention` |
-| `suspicious` | Transaction attempted away from a bank, or repeated blocked/spammed requests (`spamThreshold` per `spamWindow`) |
+| `suspicious` | Transaction attempted away from a bank (max one alert per player per `spamWindow`), or repeated blocked/spammed requests (`spamThreshold` per `spamWindow`) |
 | `export` | Another resource changed a balance via `AddBranchMoney` / `RemoveBranchMoney` (shows which resource) |
+| `loan` | Loan taken, payment, cleared, overdue, auto-collected |
+| `lockbox` | Lockbox rented, enlarged, items stored / withdrawn |
 | `system` | Resource start, database setup failures, missing tables |
 
 Every player embed includes character name, citizen ID, server ID and the identifiers enabled in `showIdentifiers` (license and Discord by default; Steam and IP are off).

@@ -36,6 +36,47 @@ Config.MigrateCoreMoney = true         -- one-off: move old bank/valbank/rhobank
 Config.TransferFeePercent = 5          -- % fee charged on branch-to-branch wires
 Config.TransferMinFee     = 1          -- minimum fee in $
 
+-- Loans: borrow money from a branch. The loan is paid into that branch account
+-- and must be repaid (from the branch vault or cash) at the same branch.
+Config.Loans = {
+    enabled         = true,
+    minAmount       = 50,
+    maxAmount       = 2000,      -- largest single loan
+    interestPercent = 10,        -- flat interest added when the loan is taken ($1000 -> owe $1100)
+    termDays        = 7,         -- real days to repay
+    maxActive       = 1,         -- loans a player may have open across ALL branches
+    minAccountHours = 0,         -- account must be at least this many real hours old (0 = off)
+    latePenaltyPercent = 10,     -- added once when the loan goes overdue
+    autoCollect     = true,      -- overdue loans are collected from the player's branch balances automatically
+    checkInterval   = 10,        -- minutes between overdue checks
+}
+
+-- Vault lockboxes: rent a safe-deposit box at a branch to store whitelisted items.
+-- Capacity is total item count (e.g. 25 = 25 gold bars).
+Config.Lockbox = {
+    enabled = true,
+    sizes = {
+        small  = { label = 'Small Lockbox',  capacity = 25,  price = 50  },
+        medium = { label = 'Medium Lockbox', capacity = 50,  price = 150 },
+        large  = { label = 'Large Lockbox',  capacity = 100, price = 300 },
+    },
+    -- Only the SMALL lockbox can be enlarged, one step at a time, for an extra fee
+    upgrade = {
+        size     = 'small',
+        step     = 10,           -- capacity added per upgrade
+        price    = 40,           -- fee per upgrade
+        maxSteps = 3,            -- small 25 -> 55 max
+    },
+    payWith = 'bank',            -- 'bank' = paid from this branch vault, 'cash' = paid in cash
+    -- Items allowed in a lockbox (anything not listed is refused)
+    items = {
+        resource_gold_bar = true,
+        -- resource_silver_bar = true,
+        -- gold_nugget = true,
+    },
+    imagePath = 'nui://rsg-inventory/html/images/', -- where item images are loaded from
+}
+
 -- Blip
 Config.Blip = {
     enabled = true,

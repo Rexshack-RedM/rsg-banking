@@ -28,6 +28,14 @@ local UI_KEYS = {
     'ui_wire_desc', 'ui_send_wire', 'ui_fee_info', 'ui_opening_fee', 'ui_free_to_open', 'ui_tx_deposit', 'ui_tx_withdraw',
     'ui_tx_wire_in', 'ui_tx_wire_out', 'ui_tx_opened', 'ui_branch_no_account', 'ui_branch_here', 'ui_branch_visit',
     'ui_pill_here', 'ui_free', 'ui_no_transactions', 'ui_pill_home', 'ui_make_home', 'ui_home_hint',
+    -- loans
+    'ui_tab_loans', 'ui_loan_desc', 'ui_loan_terms', 'ui_loan_repay_total', 'ui_take_loan', 'ui_loan_owed', 'ui_loan_due',
+    'ui_loan_overdue', 'ui_loan_limit_at', 'ui_max', 'ui_pay_vault', 'ui_pay_cash', 'ui_pay_all', 'ui_loan_limit', 'ui_loan_age', 'ui_loan_borrowed',
+    'ui_tx_loan', 'ui_tx_loan_payment', 'ui_tx_loan_late', 'ui_tx_lockbox', 'ui_tx_lockbox_up',
+    -- lockbox
+    'ui_tab_lockbox', 'ui_lockbox_desc', 'ui_lockbox_accepts', 'ui_lockbox_capacity', 'ui_rent', 'ui_lockbox_used',
+    'ui_enlarge', 'ui_lockbox_maxed', 'ui_in_lockbox', 'ui_on_you', 'ui_qty', 'ui_store', 'ui_take', 'ui_lockbox_empty',
+    'ui_nothing_to_store', 'ui_paid_from_vault', 'ui_paid_cash',
 }
 local uiLocales
 
@@ -58,38 +66,41 @@ end)
 
 RegisterNUICallback('close', function(_, cb) closeUI(); cb('ok') end)
 
-RegisterNUICallback('openAccount', function(_, cb)
-    if currentBank then pushData(lib.callback.await('rsg-banking:server:openAccount', false, currentBank)) end
-    cb('ok')
-end)
+-- NUI button -> server callback (current bank is always passed first) -> refreshed data back to the UI
+local function nuiAction(name, cbName, ...)
+    local args = { ... }
+    RegisterNUICallback(name, function(d, cb)
+        if currentBank then
+            local params = {}
+            for i, k in ipairs(args) do params[i] = d[k] end
+            pushData(lib.callback.await(cbName, false, currentBank, table.unpack(params, 1, #args)))
+        end
+        cb('ok')
+    end)
+end
 
-RegisterNUICallback('setHome', function(_, cb)
-    if currentBank then pushData(lib.callback.await('rsg-banking:server:setHome', false, currentBank)) end
-    cb('ok')
-end)
-
-RegisterNUICallback('deposit', function(d, cb)
-    if currentBank then pushData(lib.callback.await('rsg-banking:server:deposit', false, currentBank, d.amount)) end
-    cb('ok')
-end)
-
-RegisterNUICallback('withdraw', function(d, cb)
-    if currentBank then pushData(lib.callback.await('rsg-banking:server:withdraw', false, currentBank, d.amount)) end
-    cb('ok')
-end)
-
-RegisterNUICallback('transfer', function(d, cb)
-    if currentBank then pushData(lib.callback.await('rsg-banking:server:transfer', false, currentBank, d.target, d.amount)) end
-    cb('ok')
-end)
+nuiAction('openAccount',     'rsg-banking:server:openAccount')
+nuiAction('setHome',         'rsg-banking:server:setHome')
+nuiAction('deposit',         'rsg-banking:server:deposit',         'amount')
+nuiAction('withdraw',        'rsg-banking:server:withdraw',        'amount')
+nuiAction('transfer',        'rsg-banking:server:transfer',        'target', 'amount')
+nuiAction('takeLoan',        'rsg-banking:server:takeLoan',        'amount')
+nuiAction('repayLoan',       'rsg-banking:server:repayLoan',       'amount', 'method')
+nuiAction('buyLockbox',      'rsg-banking:server:buyLockbox',      'size')
+nuiAction('upgradeLockbox',  'rsg-banking:server:upgradeLockbox')
+nuiAction('lockboxDeposit',  'rsg-banking:server:lockboxDeposit',  'item', 'qty')
+nuiAction('lockboxWithdraw', 'rsg-banking:server:lockboxWithdraw', 'item', 'qty')
 
 -- close the menu if the player walks away or the bank closes
 CreateThread(function()
     while true do
         if currentBank then
             Wait(1000)
-            local dist = #(GetEntityCoords(cache.ped) - Config.Banks[currentBank].coords)
-            if dist > Config.ServerMaxDistance or not isOpen() then closeUI() end
+            -- the menu may have been closed during the wait
+            local bank = currentBank and Config.Banks[currentBank]
+            if bank and (#(GetEntityCoords(cache.ped) - bank.coords) > Config.ServerMaxDistance or not isOpen()) then
+                closeUI()
+            end
         else
             Wait(2000)
         end

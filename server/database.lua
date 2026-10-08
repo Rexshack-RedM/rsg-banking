@@ -57,6 +57,48 @@ local tables = {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ]]
     },
+    {
+        name = 'rsg_bank_loans',
+        sql = [[
+            CREATE TABLE IF NOT EXISTS `rsg_bank_loans` (
+                `id` INT(11) NOT NULL AUTO_INCREMENT,
+                `citizenid` VARCHAR(50) NOT NULL,
+                `bank` VARCHAR(50) NOT NULL,
+                `principal` DECIMAL(12,2) NOT NULL,
+                `owed` DECIMAL(12,2) NOT NULL,
+                `due_at` TIMESTAMP NOT NULL,
+                `late` TINYINT(1) NOT NULL DEFAULT 0,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `citizen_bank` (`citizenid`, `bank`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ]]
+    },
+    {
+        name = 'rsg_bank_lockboxes',
+        sql = [[
+            CREATE TABLE IF NOT EXISTS `rsg_bank_lockboxes` (
+                `citizenid` VARCHAR(50) NOT NULL,
+                `bank` VARCHAR(50) NOT NULL,
+                `size` VARCHAR(20) NOT NULL,
+                `upgrades` INT(11) NOT NULL DEFAULT 0,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`citizenid`, `bank`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ]]
+    },
+    {
+        name = 'rsg_bank_lockbox_items',
+        sql = [[
+            CREATE TABLE IF NOT EXISTS `rsg_bank_lockbox_items` (
+                `citizenid` VARCHAR(50) NOT NULL,
+                `bank` VARCHAR(50) NOT NULL,
+                `item` VARCHAR(100) NOT NULL,
+                `amount` INT(11) NOT NULL DEFAULT 0,
+                PRIMARY KEY (`citizenid`, `bank`, `item`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ]]
+    },
 }
 
 local function log(color, msg)

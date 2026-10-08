@@ -45,6 +45,8 @@
       <div class="tab active" data-tab="vault" data-i18n="ui_tab_teller">Teller</div>
       <div class="tab" data-tab="wire" data-i18n="ui_tab_wire">Wire</div>
       <div class="tab" data-tab="branches" data-i18n="ui_tab_branches">Branches</div>
+      <div class="tab" data-tab="loans" id="loansTabBtn" data-i18n="ui_tab_loans">Loans</div>
+      <div class="tab" data-tab="lockbox" id="lockboxTabBtn" data-i18n="ui_tab_lockbox">Lockbox</div>
       <div class="tab" data-tab="ledger" data-i18n="ui_tab_ledger">Ledger</div>
     </div>
 
@@ -78,6 +80,60 @@
 
     <div class="section hidden" id="tab-branches"><div class="list" id="branchList"></div></div>
     <div class="section hidden" id="tab-ledger"><div class="list" id="ledgerList"></div></div>
+
+    <div class="section hidden" id="tab-loans">
+      <div class="section hidden" id="loanNew">
+        <div class="desc" data-i18n="ui_loan_desc">Borrow from this branch. The money is paid into your vault here.</div>
+        <div class="fee" id="loanTerms"></div>
+        <input type="number" id="loanAmount" class="input" data-i18n-ph="ui_amount" placeholder="Amount ($)" min="0" step="1">
+        <div class="quick"><div class="chip" id="loanMax" data-i18n="ui_max">Max</div></div>
+        <div class="fee" id="loanRepayInfo"></div>
+        <div class="actions"><button class="wood-btn" id="loanTakeBtn" data-i18n="ui_take_loan">Take Loan</button></div>
+      </div>
+      <div class="wire-empty hidden" id="loanBlocked">
+        <div class="badge big">&#9878;</div>
+        <div class="desc center" id="loanBlockedText"></div>
+      </div>
+      <div class="section hidden" id="loanActive">
+        <div class="balances">
+          <div class="bal">
+            <div class="bal-label" data-i18n="ui_loan_owed">Amount Owed</div>
+            <div class="bal-value neg" id="loanOwed">$0.00</div>
+          </div>
+        </div>
+        <div class="fee center" id="loanDue"></div>
+        <input type="number" id="loanPayAmount" class="input" data-i18n-ph="ui_amount" placeholder="Amount ($)" min="0" step="0.01">
+        <div class="quick"><div class="chip" id="loanPayAll" data-i18n="ui_pay_all">Pay All</div></div>
+        <div class="actions">
+          <button class="wood-btn" id="loanPayBank" data-i18n="ui_pay_vault">Pay from Vault</button>
+          <button class="wood-btn" id="loanPayCash" data-i18n="ui_pay_cash">Pay with Cash</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section hidden" id="tab-lockbox">
+      <div class="section hidden" id="boxShop">
+        <div class="desc" data-i18n="ui_lockbox_desc">Rent a lockbox in the vault to keep valuables safe.</div>
+        <div class="fee" id="boxAccepts"></div>
+        <div class="list" id="boxSizes"></div>
+        <div class="fee center" id="boxPayNote"></div>
+      </div>
+      <div class="section hidden" id="boxOwned">
+        <div class="box-head">
+          <div class="row-main">
+            <div class="row-title" id="boxLabel"></div>
+            <div class="row-sub" id="boxUsed"></div>
+          </div>
+          <button class="wood-btn small-btn" id="boxUpgradeBtn"></button>
+        </div>
+        <div class="meter"><div class="meter-fill" id="boxMeter"></div></div>
+        <input type="number" id="boxQty" class="input" data-i18n-ph="ui_qty" placeholder="Qty (blank = all)" min="1" step="1">
+        <div class="list-title" data-i18n="ui_in_lockbox">In Lockbox</div>
+        <div class="list short" id="boxStored"></div>
+        <div class="list-title" data-i18n="ui_on_you">On You</div>
+        <div class="list short" id="boxCarry"></div>
+      </div>
+    </div>
     </div>
   </div>
 </div>

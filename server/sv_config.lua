@@ -23,6 +23,8 @@ SVConfig.Webhooks = {
         suspicious     = { enabled = true, url = '', color = 10038562, title = 'Suspicious Activity' },
         export         = { enabled = true, url = '', color = 9807270,  title = 'Script Balance Change' },
         system         = { enabled = true, url = '', color = 2303786,  title = 'System' },
+        loan           = { enabled = true, url = '', color = 15844367, title = 'Loan' },
+        lockbox        = { enabled = true, url = '', color = 12745742, title = 'Vault Lockbox' },
     },
 
     -- Large transaction alert (sent in addition to the normal log)

@@ -8,6 +8,7 @@ local lastCall = {}   -- [src] = GetGameTimer() of last request (rate limit)
 -- helpers
 ---------------------------------------------------------------------
 local function round(n) return math.floor(n * 100 + 0.5) / 100 end
+local function m(n) return ('%.2f'):format(tonumber(n) or 0) end -- money for notifications
 
 local function notify(src, key, ntype, ...)
     TriggerClientEvent('ox_lib:notify', src, {
@@ -38,7 +39,7 @@ local function validAmount(src, amount)
     amount = round(amount)
     if amount < 0.01 then notify(src, 'sv_invalid_amount', 'error'); return nil end
     if amount > Config.MaxTransaction then
-        notify(src, 'sv_max_amount', 'error', Config.MaxTransaction); return nil
+        notify(src, 'sv_max_amount', 'error', m(Config.MaxTransaction)); return nil
     end
     return amount
 end
@@ -103,6 +104,8 @@ local function buildData(src, bankId)
         branches   = branches,
         homeBank   = GetHomeBranch and GetHomeBranch(cid) or nil,
         history    = history,
+        loan       = BuildLoanData and BuildLoanData(cid, bankId, owned) or nil,
+        lockbox    = BuildLockboxData and BuildLockboxData(Player, bankId) or nil,
     }
 end
 
@@ -124,6 +127,12 @@ local function guarded(src, bankId, fn)
     return buildData(src, bankId)
 end
 
+-- shared with server/loans.lua and server/lockbox.lua
+Bank = {
+    round = round, money = m, notify = notify, guarded = guarded, validAmount = validAmount,
+    getBalance = getBalance, hasAccount = hasAccount, credit = credit, debit = debit, logTx = logTx,
+}
+
 ---------------------------------------------------------------------
 -- callbacks
 ---------------------------------------------------------------------
@@ -138,7 +147,7 @@ lib.callback.register('rsg-banking:server:openAccount', function(src, bankId)
         if hasAccount(cid, bankId) then return notify(src, 'sv_account_exists', 'error') end
         local fee = math.max(0, tonumber(Config.AccountOpenFee) or 0)
         if fee > 0 and not Player.Functions.RemoveMoney('cash', fee, 'bank-open-' .. bankId) then
-            return notify(src, 'sv_cant_afford_open', 'error', fee)
+            return notify(src, 'sv_cant_afford_open', 'error', m(fee))
         end
         local id = MySQL.insert.await('INSERT IGNORE INTO rsg_bank_accounts (citizenid, bank, balance) VALUES (?, ?, 0)', { cid, bankId })
         if not id or id == 0 then
@@ -148,7 +157,7 @@ lib.callback.register('rsg-banking:server:openAccount', function(src, bankId)
         logTx(cid, bankId, 'opened', fee, nil)
         if not GetHomeBranch(cid) then
             SetHomeBranch(cid, bankId)
-            exports['rsg-banking']:SweepCoreBank(src) -- anything waiting in core 'bank' money
+            SweepCoreBank(src) -- anything waiting in core 'bank' money
         end
         notify(src, 'sv_account_opened', 'success', Config.Banks[bankId].label)
         BankLog('account_opened', src, {
@@ -170,7 +179,7 @@ lib.callback.register('rsg-banking:server:deposit', function(src, bankId, amount
             return notify(src, 'sv_no_account', 'error')
         end
         logTx(cid, bankId, 'deposit', amount, nil)
-        notify(src, 'sv_deposited', 'success', amount)
+        notify(src, 'sv_deposited', 'success', m(amount))
         local label = Config.Banks[bankId].label
         BankLog('deposit', src, {
             { name = 'Branch', value = label, inline = true },
@@ -187,7 +196,7 @@ lib.callback.register('rsg-banking:server:withdraw', function(src, bankId, amoun
         if not debit(cid, bankId, amount) then return notify(src, 'sv_not_enough_balance', 'error') end
         Player.Functions.AddMoney('cash', amount, 'bank-withdraw-' .. bankId)
         logTx(cid, bankId, 'withdraw', amount, nil)
-        notify(src, 'sv_withdrew', 'success', amount)
+        notify(src, 'sv_withdrew', 'success', m(amount))
         local label = Config.Banks[bankId].label
         BankLog('withdraw', src, {
             { name = 'Branch', value = label, inline = true },
@@ -217,9 +226,9 @@ lib.callback.register('rsg-banking:server:transfer', function(src, bankId, targe
         end
 
         local toLabel = Config.Banks[targetId].label
-        logTx(cid, bankId, 'wire_out', total, locale('tx_wire_to', toLabel, fee))
+        logTx(cid, bankId, 'wire_out', total, locale('tx_wire_to', toLabel, m(fee)))
         logTx(cid, targetId, 'wire_in', amount, locale('tx_wire_from', Config.Banks[bankId].label))
-        notify(src, 'sv_transferred', 'success', amount, toLabel, fee)
+        notify(src, 'sv_transferred', 'success', m(amount), toLabel, m(fee))
         local fromLabel = Config.Banks[bankId].label
         BankLog('transfer', src, {
             { name = 'From', value = fromLabel, inline = true },

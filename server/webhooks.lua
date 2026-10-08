@@ -121,8 +121,12 @@ function BankLogBlocked(src, reason, bankId)
     end
 end
 
--- Single event alert (e.g. bank request from far away)
+-- Single event alert (e.g. bank request from far away). At most one per player per spamWindow.
+local lastSuspicious = {}
 function BankLogSuspicious(src, reason, bankId)
+    local now = os.time()
+    if lastSuspicious[src] and now - lastSuspicious[src] < W.spamWindow then return end
+    lastSuspicious[src] = now
     local ped = GetPlayerPed(src)
     local c = ped ~= 0 and GetEntityCoords(ped) or vector3(0, 0, 0)
     BankLog('suspicious', src, {
@@ -132,7 +136,7 @@ function BankLogSuspicious(src, reason, bankId)
     })
 end
 
-AddEventHandler('playerDropped', function() spam[source] = nil end)
+AddEventHandler('playerDropped', function() spam[source], lastSuspicious[source] = nil, nil end)
 
 -- quick test: run `bankwebhooktest` in the server console
 RegisterCommand('bankwebhooktest', function(src)

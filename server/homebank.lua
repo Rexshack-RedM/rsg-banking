@@ -148,6 +148,7 @@ end)
 
 exports('GetHomeBranch', GetHomeBranch)
 exports('AddHomeMoney', AddHomeMoney)
-exports('SweepCoreBank', function(src)
+function SweepCoreBank(src)
     local P = RSGCore.Functions.GetPlayer(src); if P then sweepOnline(P) end
-end)
+end
+exports('SweepCoreBank', SweepCoreBank)

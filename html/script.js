@@ -19,7 +19,7 @@ function post(name, body = {}) {
 
 function setTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  ['vault', 'wire', 'branches', 'ledger'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== tab));
+  ['vault', 'wire', 'branches', 'ledger', 'loans', 'lockbox'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== tab));
 }
 
 function calcFee() {
@@ -35,7 +35,93 @@ const TX = {
   wire_in:  { icon: '&#8618;',  label: 'ui_tx_wire_in',  sign: 1 },
   wire_out: { icon: '&#8617;',  label: 'ui_tx_wire_out', sign: -1 },
   opened:   { icon: '&#10022;', label: 'ui_tx_opened',   sign: -1 },
+  loan:         { icon: '&#9878;',  label: 'ui_tx_loan',         sign: 1 },
+  loan_payment: { icon: '&#9878;',  label: 'ui_tx_loan_payment', sign: -1 },
+  loan_late:    { icon: '&#9888;',  label: 'ui_tx_loan_late',    sign: 0 },
+  lockbox:      { icon: '&#128274;', label: 'ui_tx_lockbox',     sign: -1 },
+  lockbox_up:   { icon: '&#128274;', label: 'ui_tx_lockbox_up',  sign: -1 },
 };
+
+const fmtDate = ts => ts ? new Date(ts * 1000).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+
+function loanRepayInfo() {
+  const l = state && state.loan; if (!l) return;
+  const a = parseFloat($('loanAmount').value) || 0;
+  $('loanRepayInfo').textContent = a > 0 ? t('ui_loan_repay_total', fmt(Math.round(a * (100 + l.interest)) / 100)) : '';
+}
+
+function renderLoans(l) {
+  $('loansTabBtn').classList.toggle('hidden', !l);
+  if (!l) return;
+  const a = l.active;
+  $('loanActive').classList.toggle('hidden', !a);
+  $('loanNew').classList.toggle('hidden', !!a || !!l.blocked);
+  $('loanBlocked').classList.toggle('hidden', !!a || !l.blocked);
+  if (a) {
+    $('loanOwed').textContent = fmt(a.owed);
+    const late = a.late || a.due < l.now;
+    $('loanDue').textContent = late ? t('ui_loan_overdue') : t('ui_loan_due', fmtDate(a.due)) + ' · ' + t('ui_loan_borrowed', fmt(a.principal));
+    $('loanDue').classList.toggle('late', late);
+  } else if (l.blocked) {
+    $('loanBlockedText').textContent = l.blocked === 'age' ? t('ui_loan_age', l.minHours) : (l.elsewhere && l.elsewhere.length ? t('ui_loan_limit_at', l.elsewhere.join(', ')) : t('ui_loan_limit'));
+  } else {
+    $('loanTerms').textContent = t('ui_loan_terms', l.interest, l.termDays, fmt(l.min), fmt(l.max));
+    loanRepayInfo();
+  }
+}
+
+const itemImg = (b, it) => `<img class="item-img" src="${esc((b.imagePath || '') + it.image)}" onerror="this.style.visibility='hidden'">`;
+
+function renderLockbox(b) {
+  $('lockboxTabBtn').classList.toggle('hidden', !b);
+  if (!b) return;
+  const box = b.box;
+  $('boxShop').classList.toggle('hidden', !!box);
+  $('boxOwned').classList.toggle('hidden', !box);
+  if (!box) {
+    $('boxAccepts').textContent = t('ui_lockbox_accepts', b.allowed.join(', '));
+    $('boxPayNote').textContent = b.payWith === 'cash' ? t('ui_paid_cash') : t('ui_paid_from_vault');
+    $('boxSizes').innerHTML = b.sizes.map(s => `
+      <div class="row">
+        <div class="badge">&#128274;</div>
+        <div class="row-main"><div class="row-title">${esc(s.label)}</div><div class="row-sub">${esc(t('ui_lockbox_capacity', s.capacity))}</div></div>
+        <div class="amt">${fmt(s.price)}</div>
+        <button class="wood-btn small-btn rent-btn" data-size="${esc(s.id)}">${esc(t('ui_rent'))}</button>
+      </div>`).join('');
+    document.querySelectorAll('.rent-btn').forEach(x => x.onclick = () => act('buyLockbox', { size: x.dataset.size }));
+    return;
+  }
+  $('boxLabel').textContent = box.label;
+  $('boxUsed').textContent = t('ui_lockbox_used', box.used, box.capacity);
+  const pct = box.capacity > 0 ? Math.min(100, box.used / box.capacity * 100) : 100;
+  $('boxMeter').style.width = pct + '%';
+  $('boxMeter').classList.toggle('full', pct >= 100);
+  const upBtn = $('boxUpgradeBtn');
+  const isUpSize = box.maxUpgrades > 0 && (box.canUpgrade || box.upgrades > 0);
+  upBtn.classList.toggle('hidden', !isUpSize);
+  upBtn.textContent = box.canUpgrade ? t('ui_enlarge', box.upgradeStep, fmt(box.upgradePrice)) : t('ui_lockbox_maxed');
+  upBtn.dataset.locked = box.canUpgrade ? '' : '1';
+  upBtn.onclick = () => { if (box.canUpgrade) act('upgradeLockbox', {}); };
+
+  $('boxStored').innerHTML = box.items.length ? box.items.map(it => `
+    <div class="row">${itemImg(b, it)}
+      <div class="row-main"><div class="row-title">${esc(it.label)}</div></div>
+      <div class="amt">x${it.amount}</div>
+      <button class="wood-btn small-btn box-take" data-item="${esc(it.name)}" data-max="${it.amount}">${esc(t('ui_take'))}</button>
+    </div>`).join('') : `<div class="empty">${esc(t('ui_lockbox_empty'))}</div>`;
+  $('boxCarry').innerHTML = b.carry.length ? b.carry.map(it => `
+    <div class="row">${itemImg(b, it)}
+      <div class="row-main"><div class="row-title">${esc(it.label)}</div></div>
+      <div class="amt">x${it.amount}</div>
+      <button class="wood-btn small-btn box-store" data-item="${esc(it.name)}" data-max="${it.amount}">${esc(t('ui_store'))}</button>
+    </div>`).join('') : `<div class="empty">${esc(t('ui_nothing_to_store'))}</div>`;
+
+  const qty = max => { const q = parseInt($('boxQty').value, 10); return q > 0 ? q : max; };
+  document.querySelectorAll('.box-take').forEach(x => x.onclick = () =>
+    act('lockboxWithdraw', { item: x.dataset.item, qty: qty(+x.dataset.max) }));
+  document.querySelectorAll('.box-store').forEach(x => x.onclick = () =>
+    act('lockboxDeposit', { item: x.dataset.item, qty: Math.min(qty(+x.dataset.max), Math.max(0, box.capacity - box.used)) || qty(+x.dataset.max) }));
+}
 
 function render(d) {
   state = d;
@@ -76,9 +162,11 @@ function render(d) {
     const date = h.ts ? new Date(h.ts * 1000).toLocaleDateString() : '';
     return `<div class="row"><div class="badge">${tx.icon}</div>
       <div class="row-main"><div class="row-title">${esc(t(tx.label))}</div><div class="row-sub">${esc(h.note || date)}</div></div>
-      <div class="amt ${Number(h.amount) === 0 ? '' : tx.sign > 0 ? 'pos' : 'neg'}">${Number(h.amount) === 0 ? esc(t('ui_free')) : (tx.sign > 0 ? '+' : '-') + fmt(h.amount)}</div></div>`;
+      <div class="amt ${Number(h.amount) === 0 || tx.sign === 0 ? '' : tx.sign > 0 ? 'pos' : 'neg'}">${Number(h.amount) === 0 ? esc(t('ui_free')) : (tx.sign > 0 ? '+' : tx.sign < 0 ? '-' : '') + fmt(h.amount)}</div></div>`;
   }).join('') : `<div class="empty">${esc(t('ui_no_transactions'))}</div>`;
   calcFee();
+  renderLoans(d.loan);
+  renderLockbox(d.lockbox);
 }
 
 async function act(name, body) {
@@ -86,14 +174,14 @@ async function act(name, body) {
   busy = true;
   document.querySelectorAll('.wood-btn').forEach(b => b.disabled = true);
   await post(name, body);
-  setTimeout(() => { busy = false; document.querySelectorAll('.wood-btn').forEach(b => b.disabled = false); if (state) $('openBtn').disabled = (state.cash || 0) < (state.openFee || 0); }, 500);
+  setTimeout(() => { busy = false; document.querySelectorAll('.wood-btn').forEach(b => b.disabled = false); if (state) { $('openBtn').disabled = (state.cash || 0) < (state.openFee || 0); $('boxUpgradeBtn').disabled = !!$('boxUpgradeBtn').dataset.locked; } }, 500);
 }
 
 function close() { $('app').classList.add('hidden'); post('close'); }
 
 window.addEventListener('message', e => {
   const m = e.data;
-  if (m.action === 'open') { if (m.locales) { L = m.locales; applyI18n(); } render(m.data); setTab('vault'); $('amount').value = ''; $('wireAmount').value = ''; $('app').classList.remove('hidden'); window.restorePanelPos && window.restorePanelPos(); }
+  if (m.action === 'open') { if (m.locales) { L = m.locales; applyI18n(); } render(m.data); setTab('vault'); $('amount').value = ''; $('wireAmount').value = ''; $('loanAmount').value = ''; $('loanPayAmount').value = ''; $('boxQty').value = ''; $('app').classList.remove('hidden'); window.restorePanelPos && window.restorePanelPos(); }
   else if (m.action === 'update') render(m.data);
   else if (m.action === 'close') $('app').classList.add('hidden');
 });
@@ -108,6 +196,15 @@ $('withdrawBtn').onclick = () => { const a = parseFloat($('amount').value); if (
 $('wireBtn').onclick = () => { const a = parseFloat($('wireAmount').value), t = $('wireTarget').value; if (a > 0 && t) act('transfer', { target: t, amount: a }); };
 $('openBtn').onclick = () => act('openAccount', {});
 $('wireAmount').addEventListener('input', calcFee);
+$('loanAmount').addEventListener('input', loanRepayInfo);
+$('loanMax').onclick = () => { if (state?.loan) { $('loanAmount').value = state.loan.max; loanRepayInfo(); } };
+// Enter submits the main action of the focused field
+[['amount', 'depositBtn'], ['wireAmount', 'wireBtn'], ['loanAmount', 'loanTakeBtn'], ['loanPayAmount', 'loanPayBank']].forEach(([inp, btn]) =>
+  $(inp).addEventListener('keydown', e => { if (e.key === 'Enter') $(btn).click(); }));
+$('loanTakeBtn').onclick = () => { const a = parseFloat($('loanAmount').value); if (a > 0) act('takeLoan', { amount: a }); };
+$('loanPayAll').onclick = () => { if (state?.loan?.active) $('loanPayAmount').value = state.loan.active.owed; };
+$('loanPayBank').onclick = () => { const a = parseFloat($('loanPayAmount').value); if (a > 0) act('repayLoan', { amount: a, method: 'bank' }); };
+$('loanPayCash').onclick = () => { const a = parseFloat($('loanPayAmount').value); if (a > 0) act('repayLoan', { amount: a, method: 'cash' }); };
 $('closeBtn').onclick = close;
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('app').classList.contains('hidden')) close(); });
 

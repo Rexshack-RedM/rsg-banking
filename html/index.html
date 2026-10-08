@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="hidden">
+  <div class="panel">
+    <div class="header">
+      <div class="circle-btn" data-tab="vault" data-i18n-title="ui_vault" title="Vault">&#8249;</div>
+      <div class="titles">
+        <div class="title" id="bankLabel" data-i18n="ui_bank">Bank</div>
+        <div class="subtitle" id="customer" data-i18n="ui_customer">Customer</div>
+      </div>
+      <div class="circle-btn" id="closeBtn" data-i18n-title="ui_close" title="Close">&#10005;</div>
+    </div>
+
+    <div class="divider"><span>&#10022;</span></div>
+
+    <div class="section hidden" id="openView">
+      <div class="badge big">&#127974;</div>
+      <div class="open-title" data-i18n="ui_no_account_title">No Account at This Branch</div>
+      <div class="desc center" data-i18n="ui_no_account_desc">Each bank keeps its own books. Open an account here to deposit, withdraw and receive wires.</div>
+      <div class="fee center" id="openFee"></div>
+      <div class="actions"><button class="wood-btn" id="openBtn" data-i18n="ui_open_account">Open Account</button></div>
+    </div>
+
+    <div id="mainView">
+    <div class="balances">
+      <div class="bal">
+        <div class="bal-label" data-i18n="ui_branch_vault">Branch Vault</div>
+        <div class="bal-value" id="balance">$0.00</div>
+      </div>
+      <div class="bal">
+        <div class="bal-label" data-i18n="ui_cash_on_hand">Cash on Hand</div>
+        <div class="bal-value" id="cash">$0.00</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="vault" data-i18n="ui_tab_teller">Teller</div>
+      <div class="tab" data-tab="wire" data-i18n="ui_tab_wire">Wire</div>
+      <div class="tab" data-tab="branches" data-i18n="ui_tab_branches">Branches</div>
+      <div class="tab" data-tab="ledger" data-i18n="ui_tab_ledger">Ledger</div>
+    </div>
+
+    <div class="section" id="tab-vault">
+      <input type="number" id="amount" class="input" data-i18n-ph="ui_amount" placeholder="Amount ($)" min="0" step="0.01">
+      <div class="quick">
+        <div class="chip" data-q="10">$10</div><div class="chip" data-q="50">$50</div>
+        <div class="chip" data-q="100">$100</div><div class="chip" data-q="all-cash" data-i18n="ui_all_cash">All Cash</div>
+        <div class="chip" data-q="all-bank" data-i18n="ui_all_vault">All Vault</div>
+      </div>
+      <div class="actions">
+        <button class="wood-btn" id="depositBtn" data-i18n="ui_deposit">Deposit</button>
+        <button class="wood-btn" id="withdrawBtn" data-i18n="ui_withdraw">Withdraw</button>
+      </div>
+    </div>
+
+    <div class="section hidden" id="tab-wire">
+      <div class="wire-empty hidden" id="wireEmpty">
+        <div class="badge big">&#8617;</div>
+        <div class="open-title" data-i18n="ui_no_other_title">No Other Accounts</div>
+        <div class="desc center" data-i18n="ui_no_other_desc">You only hold an account at this branch. Visit another bank and open an account there to send wires between them.</div>
+      </div>
+      <div class="section" id="wireForm">
+        <div class="desc" data-i18n="ui_wire_desc">Wire funds from this branch to another of your accounts.</div>
+        <select id="wireTarget" class="input"></select>
+        <input type="number" id="wireAmount" class="input" data-i18n-ph="ui_amount" placeholder="Amount ($)" min="0" step="0.01">
+        <div class="fee" id="feeInfo">Fee: $0.00 &middot; Total: $0.00</div>
+        <div class="actions"><button class="wood-btn" id="wireBtn" data-i18n="ui_send_wire">Send Wire</button></div>
+      </div>
+    </div>
+
+    <div class="section hidden" id="tab-branches"><div class="list" id="branchList"></div></div>
+    <div class="section hidden" id="tab-ledger"><div class="list" id="ledgerList"></div></div>
+    </div>
+  </div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>

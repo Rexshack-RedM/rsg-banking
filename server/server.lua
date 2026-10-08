@@ -1,315 +1,275 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
-local banking = nil
 lib.locale()
-math = lib.math
-local SendDiscordWebhook = require('server.discord_webhook')
 
-local rateLimits = {}
-local function isRateLimited(source, eventType)
-    local maxCalls = Config.RateLimitMaxCalls
-    local windowSec = Config.RateLimitWindowSec
-    if not rateLimits[source] then rateLimits[source] = {} end
-    if not rateLimits[source][eventType] then rateLimits[source][eventType] = {} end
-    local now = os.time()
-    local window = rateLimits[source][eventType]
-    for i = #window, 1, -1 do
-        if now - window[i] > windowSec then
-            table.remove(window, i)
-        end
-    end
-    if #window >= maxCalls then
-        print(('[%s] Rate limit exceeded for player %s on %s'):format(GetCurrentResourceName(), source, eventType))
-        return true
-    end
-    window[#window + 1] = now
+local busy     = {}   -- [src] = true while a transaction is running
+local lastCall = {}   -- [src] = GetGameTimer() of last request (rate limit)
+
+---------------------------------------------------------------------
+-- helpers
+---------------------------------------------------------------------
+local function round(n) return math.floor(n * 100 + 0.5) / 100 end
+
+local function notify(src, key, ntype, ...)
+    TriggerClientEvent('ox_lib:notify', src, {
+        title = locale('cl_title'), description = locale(key, ...), type = ntype or 'inform', duration = 5000
+    })
+end
+
+local function rateLimited(src)
+    local now = GetGameTimer()
+    if lastCall[src] and now - lastCall[src] < Config.Cooldown then BankLogBlocked(src, 'Rate limited'); return true end
+    lastCall[src] = now
     return false
 end
 
-local function isValidMoneyType(moneytype)
-    for _, v in ipairs(Config.BankLocations) do
-        if v.moneytype == moneytype then return true end
-    end
-    return false
+local function nearBank(src, bankId)
+    local bank = type(bankId) == 'string' and Config.Banks[bankId]
+    if not bank then return false end
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return false end
+    return #(GetEntityCoords(ped) - bank.coords) <= Config.ServerMaxDistance
 end
 
-local ValidTowns = { Armadillo = true, Blackwater = true, Rhodes = true, SaintDenis = true, Valentine = true }
-local function isValidTown(town)
-    return ValidTowns[town] == true
+local function validAmount(src, amount)
+    amount = tonumber(amount)
+    if not amount or amount ~= amount or amount == math.huge then
+        notify(src, 'sv_invalid_amount', 'error'); return nil
+    end
+    amount = round(amount)
+    if amount < 0.01 then notify(src, 'sv_invalid_amount', 'error'); return nil end
+    if amount > Config.MaxTransaction then
+        notify(src, 'sv_max_amount', 'error', Config.MaxTransaction); return nil
+    end
+    return amount
 end
 
----------------
--- stash
-----------------
-RegisterNetEvent('rsg-banking:server:opensafedeposit', function(town)
-    local src = source
-    if isRateLimited(src, 'opensafedeposit') then return end
-    if not isValidTown(town) then
-        print(('[%s] Player %s attempted to open invalid town: %s'):format(GetCurrentResourceName(), src, town))
-        return
+local function getBalance(cid, bankId)
+    return tonumber(MySQL.scalar.await('SELECT balance FROM rsg_bank_accounts WHERE citizenid = ? AND bank = ?', { cid, bankId }))
+end
+
+local function hasAccount(cid, bankId) return getBalance(cid, bankId) ~= nil end
+
+-- Atomic balance changes. Return true only if a row was actually changed.
+local function credit(cid, bankId, amount)
+    local n = MySQL.update.await('UPDATE rsg_bank_accounts SET balance = balance + ? WHERE citizenid = ? AND bank = ?', { amount, cid, bankId })
+    return (n or 0) > 0
+end
+
+local function debit(cid, bankId, amount)
+    local n = MySQL.update.await('UPDATE rsg_bank_accounts SET balance = balance - ? WHERE citizenid = ? AND bank = ? AND balance >= ?', { amount, cid, bankId, amount })
+    return (n or 0) > 0
+end
+
+local function logTx(cid, bankId, txType, amount, note)
+    MySQL.insert('INSERT INTO rsg_bank_transactions (citizenid, bank, type, amount, note) VALUES (?, ?, ?, ?, ?)',
+        { cid, bankId, txType, amount, note })
+end
+
+local function buildData(src, bankId)
+    local Player = RSGCore.Functions.GetPlayer(src)
+    if not Player then return nil end
+    local cid = Player.PlayerData.citizenid
+
+    local owned = {}
+    for _, row in ipairs(MySQL.query.await('SELECT bank, balance FROM rsg_bank_accounts WHERE citizenid = ?', { cid }) or {}) do
+        owned[row.bank] = tonumber(row.balance) or 0
+    end
+
+    local branches = {}
+    for id, b in pairs(Config.Banks) do
+        branches[#branches + 1] = { id = id, label = b.label, balance = owned[id] or 0, open = owned[id] ~= nil }
+    end
+    table.sort(branches, function(a, b) return a.label < b.label end)
+
+    local history = {}
+    if owned[bankId] then
+        history = MySQL.query.await(
+            'SELECT type, amount, note, UNIX_TIMESTAMP(created_at) AS ts FROM rsg_bank_transactions WHERE citizenid = ? AND bank = ? ORDER BY id DESC LIMIT ?',
+            { cid, bankId, Config.HistoryLimit }) or {}
+    end
+
+    local ci = Player.PlayerData.charinfo or {}
+    local name = ('%s %s'):format(ci.firstname or '', ci.lastname or ''):match('^%s*(.-)%s*$')
+    return {
+        bankId     = bankId,
+        label      = Config.Banks[bankId].label,
+        name       = name,
+        hasAccount = owned[bankId] ~= nil,
+        balance    = owned[bankId] or 0,
+        cash       = Player.Functions.GetMoney('cash') or 0,
+        openFee    = Config.AccountOpenFee,
+        feePercent = Config.TransferFeePercent,
+        minFee     = Config.TransferMinFee,
+        branches   = branches,
+        history    = history,
+    }
+end
+
+-- Player lookup, DB ready, distance, rate limit and per-player lock around every action
+local function guarded(src, bankId, fn)
+    if not BankingDBReady or busy[src] or rateLimited(src) then return nil end
+    if not nearBank(src, bankId) then
+        notify(src, 'sv_too_far', 'error')
+        BankLogSuspicious(src, 'Transaction attempted away from the bank', bankId)
+        return nil
     end
     local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
-    local data = { label = locale('sv_lang'), maxweight = Config.StorageMaxWeight, slots = Config.StorageMaxSlots }
-    local citizenId = Player.PlayerData.citizenid
-    local stashName = 'safedeposit_' .. citizenId .. town
-    exports['rsg-inventory']:OpenInventory(src, stashName, data)
+    if not Player then return nil end
+
+    busy[src] = true
+    local ok, err = pcall(fn, Player, Player.PlayerData.citizenid)
+    busy[src] = nil
+    if not ok then print(('[rsg-banking] ^1error:^7 %s'):format(err)) end
+    return buildData(src, bankId)
+end
+
+---------------------------------------------------------------------
+-- callbacks
+---------------------------------------------------------------------
+lib.callback.register('rsg-banking:server:getData', function(src, bankId)
+    if not BankingDBReady or rateLimited(src) then return nil end
+    if not nearBank(src, bankId) then BankLogBlocked(src, 'Menu request away from the bank', tostring(bankId)); return nil end
+    return buildData(src, bankId)
 end)
 
----------------------------------
--- callback for bank balance
----------------------------------
-RSGCore.Functions.CreateCallback('rsg-banking:getBankingInformation', function(source, cb, moneytype)
-
-    local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player then return cb(nil) end
-    if not isValidMoneyType(moneytype) then
-        print(('[%s] Player %s attempted to access invalid moneytype: %s'):format(GetCurrentResourceName(), source, moneytype))
-        return cb(nil)
-    end
-
-    local banking = nil
-    local cash = Player.Functions.GetMoney('cash')
-    if Player.PlayerData.money[moneytype] then
-        banking = Player.PlayerData.money[moneytype]
-    end
-
-    cb({bank = banking, cash = cash})
+lib.callback.register('rsg-banking:server:openAccount', function(src, bankId)
+    return guarded(src, bankId, function(Player, cid)
+        if hasAccount(cid, bankId) then return notify(src, 'sv_account_exists', 'error') end
+        local fee = math.max(0, tonumber(Config.AccountOpenFee) or 0)
+        if fee > 0 and not Player.Functions.RemoveMoney('cash', fee, 'bank-open-' .. bankId) then
+            return notify(src, 'sv_cant_afford_open', 'error', fee)
+        end
+        local id = MySQL.insert.await('INSERT IGNORE INTO rsg_bank_accounts (citizenid, bank, balance) VALUES (?, ?, 0)', { cid, bankId })
+        if not id or id == 0 then
+            if fee > 0 then Player.Functions.AddMoney('cash', fee, 'bank-open-refund') end
+            return notify(src, 'sv_account_exists', 'error')
+        end
+        logTx(cid, bankId, 'opened', fee, nil)
+        notify(src, 'sv_account_opened', 'success', Config.Banks[bankId].label)
+        BankLog('account_opened', src, {
+            { name = 'Branch', value = Config.Banks[bankId].label, inline = true },
+            { name = 'Fee', value = BankMoney(fee), inline = true },
+        })
+    end)
 end)
 
----------------------------------
--- deposit & withdraw
----------------------------------
-RegisterNetEvent('rsg-banking:server:transact', function(type, amount, moneytype)
-    local src = source
-    if isRateLimited(src, 'transact') then return end
-    if not isValidMoneyType(moneytype) then
-        print(('[%s] Player %s attempted to transact with invalid moneytype: %s'):format(GetCurrentResourceName(), src, moneytype))
-        return
-    end
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
-    local currentCash = Player.Functions.GetMoney('cash')
-    local currentBank = Player.Functions.GetMoney(moneytype)
-
-    amount = math.round(amount, 2)
-    if amount <= 0 then
-        lib.notify(src, {title = locale('sv_lang_1'), type = 'error'})
-        print(('[%s] Player %s attempted transaction with invalid amount: %s'):format(GetCurrentResourceName(), src, amount))
-        return
-    end
-
-    if type == 1 then
-        if amount > Config.MaxWithdraw then
-            lib.notify(src, {title = locale('sv_lang_1'), type = 'error'})
-            print(('[%s] Player %s exceeded max withdraw amount: %s > %s'):format(GetCurrentResourceName(), src, amount, Config.MaxWithdraw))
-            return
+lib.callback.register('rsg-banking:server:deposit', function(src, bankId, amount)
+    return guarded(src, bankId, function(Player, cid)
+        if not hasAccount(cid, bankId) then return notify(src, 'sv_no_account', 'error') end
+        amount = validAmount(src, amount); if not amount then return end
+        if not Player.Functions.RemoveMoney('cash', amount, 'bank-deposit-' .. bankId) then
+            return notify(src, 'sv_not_enough_cash', 'error')
         end
-        local bankRemove = amount
-        if Config.WithdrawChargeRate and Config.WithdrawChargeRate > 0 then 
-            local charge = amount * (Config.WithdrawChargeRate / 100)
-            bankRemove = math.round(amount + charge, 2)
+        if not credit(cid, bankId, amount) then
+            Player.Functions.AddMoney('cash', amount, 'bank-deposit-refund')
+            return notify(src, 'sv_no_account', 'error')
         end
-
-        if currentBank >= bankRemove then
-            Player.Functions.RemoveMoney(moneytype, bankRemove, 'bank-withdraw')
-            Player.Functions.AddMoney('cash', amount, 'bank-withdraw')
-            local newBankBalance = Player.Functions.GetMoney(moneytype)
-            TriggerClientEvent('rsg-banking:client:UpdateBanking', src, newBankBalance, moneytype)
-            if Config.Discord.TrackWithdrawals and amount >= Config.Discord.TransactionThreshold then
-                local playerName = Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname
-                SendDiscordWebhook(playerName, "Bank (" .. moneytype .. ")", amount, "Withdrawal")
-            end
-        else
-            lib.notify(src, {title = locale('sv_lang_2'), type = 'error'})
-            print(('[%s] Player %s insufficient bank funds for withdraw of %s'):format(GetCurrentResourceName(), src, bankRemove))
-        end
-        return
-    end
-
-    if type == 2 then
-        if amount > Config.MaxDeposit then
-            lib.notify(src, {title = locale('sv_lang_1'), type = 'error'})
-            print(('[%s] Player %s exceeded max deposit amount: %s > %s'):format(GetCurrentResourceName(), src, amount, Config.MaxDeposit))
-            return
-        end
-        if currentCash >= amount then
-            Player.Functions.RemoveMoney('cash', amount, 'bank-deposit')
-            Player.Functions.AddMoney(moneytype, amount, 'bank-deposit')
-            local newBankBalance = Player.Functions.GetMoney(moneytype)
-            TriggerClientEvent('rsg-banking:client:UpdateBanking', src, newBankBalance, moneytype)
-            if Config.Discord.TrackDeposits and amount >= Config.Discord.TransactionThreshold then
-                local playerName = Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname
-                SendDiscordWebhook(playerName, "Bank (" .. moneytype .. ")", amount, "Deposit")
-            end
-        else
-            lib.notify(src, {title = locale('sv_lang_2'), type = 'error'})
-            print(('[%s] Player %s insufficient cash for deposit of %s'):format(GetCurrentResourceName(), src, amount))
-        end
-        return
-    end
-
-    if type == 3 then
-        if amount > Config.MaxMoneyClip then
-            lib.notify(src, {title = locale('sv_lang_1'), type = 'error'})
-            print(('[%s] Player %s exceeded max money clip amount: %s > %s'):format(GetCurrentResourceName(), src, amount, Config.MaxMoneyClip))
-            return
-        end
-        if currentBank >= amount then
-            local info = { money = amount }
-            Player.Functions.RemoveMoney(moneytype, amount, 'bank-money_clip')
-            Player.Functions.AddItem('money_clip', 1, false, info)
-            local newBankBalance = Player.Functions.GetMoney(moneytype)
-            TriggerClientEvent('rsg-banking:client:UpdateBanking', src, newBankBalance, moneytype)
-            lib.notify(src, { title = locale('sv_lang_9'), description = locale('sv_lang_10') .. ' ' .. amount .. ' ' .. locale('sv_lang_11'), type = 'success' })
-            if Config.Discord.TrackMoneyClips and amount >= Config.Discord.TransactionThreshold then
-                local playerName = Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname
-                SendDiscordWebhook(playerName, "Money Clip", amount, "Money Clip Created")
-            end
-        else
-            lib.notify(src, {title = locale('sv_lang_2'), type = 'error'})
-            print(('[%s] Player %s insufficient bank funds for money clip of %s'):format(GetCurrentResourceName(), src, amount))
-        end
-        return
-    end
-
+        logTx(cid, bankId, 'deposit', amount, nil)
+        notify(src, 'sv_deposited', 'success', amount)
+        local label = Config.Banks[bankId].label
+        BankLog('deposit', src, {
+            { name = 'Branch', value = label, inline = true },
+            { name = 'Amount', value = BankMoney(amount), inline = true },
+            { name = 'New Balance', value = BankMoney(getBalance(cid, bankId)), inline = true },
+        })
+        BankLogLarge('Deposit', src, label, amount)
+    end)
 end)
 
----------------------------------
--- money clip made usable
----------------------------------
-RSGCore.Functions.CreateUseableItem('money_clip', function(source, item)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
-
-    local itemData = Player.Functions.GetItemBySlot(item.slot)
-    if not itemData then return end
-
-    local amount = itemData.info.money
-    if Player.Functions.RemoveItem(item.name, 1, item.slot) then
-        Player.Functions.AddMoney('cash', amount)
-        lib.notify({ title = locale('sv_lang_3'), description = locale('sv_lang_4') ..' ' .. amount .. ' ' .. locale('sv_lang_5'), type = 'success' })
-    end
+lib.callback.register('rsg-banking:server:withdraw', function(src, bankId, amount)
+    return guarded(src, bankId, function(Player, cid)
+        amount = validAmount(src, amount); if not amount then return end
+        if not debit(cid, bankId, amount) then return notify(src, 'sv_not_enough_balance', 'error') end
+        Player.Functions.AddMoney('cash', amount, 'bank-withdraw-' .. bankId)
+        logTx(cid, bankId, 'withdraw', amount, nil)
+        notify(src, 'sv_withdrew', 'success', amount)
+        local label = Config.Banks[bankId].label
+        BankLog('withdraw', src, {
+            { name = 'Branch', value = label, inline = true },
+            { name = 'Amount', value = BankMoney(amount), inline = true },
+            { name = 'New Balance', value = BankMoney(getBalance(cid, bankId)), inline = true },
+        })
+        BankLogLarge('Withdrawal', src, label, amount)
+    end)
 end)
 
----------------------------------
--- create money clip command
----------------------------------
-RSGCore.Commands.Add('moneyclip', locale('sv_lang_6'), {{ name = 'amount', help = locale('sv_lang_7') }}, true, function(source, args)
-    local src = source
-    local args1 = tonumber(args[1])
-    if args1 <= 0 then
-        lib.notify({ title = locale('sv_lang_2'), description = locale('sv_lang_8'), type = 'error' })
-        return
-    end
-
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
-
-    local money = Player.Functions.GetMoney('cash')
-    if money and money >= args1 then
-        if Player.Functions.RemoveMoney('cash', args1, 'give-money') then
-            local info =
-            {
-                money = args1
-            }
-
-            Player.Functions.AddItem('money_clip', 1, false, info)
-            lib.notify({ title = locale('sv_lang_9'), description = locale('sv_lang_10') .. ' ' .. args1 .. ' ' .. locale('sv_lang_11'), type = 'success' })
+lib.callback.register('rsg-banking:server:transfer', function(src, bankId, targetId, amount)
+    return guarded(src, bankId, function(_, cid)
+        if type(targetId) ~= 'string' or not Config.Banks[targetId] then return end
+        if targetId == bankId then return notify(src, 'sv_same_bank', 'error') end
+        if not hasAccount(cid, targetId) then
+            return notify(src, 'sv_no_account_target', 'error', Config.Banks[targetId].label)
         end
-    end
-end, 'user')
+        amount = validAmount(src, amount); if not amount then return end
 
----------------------------------
--- blood money_clip made usable
----------------------------------
-RSGCore.Functions.CreateUseableItem('blood_money_clip', function(source, item)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
+        local fee   = round(math.max(Config.TransferMinFee, amount * Config.TransferFeePercent / 100))
+        local total = round(amount + fee)
 
-    local itemData = Player.Functions.GetItemBySlot(item.slot)
-    if not itemData then return end
+        if not debit(cid, bankId, total) then return notify(src, 'sv_not_enough_balance', 'error') end
+        if not credit(cid, targetId, amount) then
+            credit(cid, bankId, total) -- roll back
+            return notify(src, 'sv_no_account_target', 'error', Config.Banks[targetId].label)
+        end
 
-    local amount = itemData.info.money
-    if Player.Functions.RemoveItem(item.name, 1, item.slot) then
-        Player.Functions.AddMoney('bloodmoney', amount)
-        lib.notify({ title = locale('sv_lang_12'), description = locale('sv_lang_4') ..' ' .. amount ..' ' .. locale('sv_lang_13'), type = 'success' })
-    end
+        local toLabel = Config.Banks[targetId].label
+        logTx(cid, bankId, 'wire_out', total, locale('tx_wire_to', toLabel, fee))
+        logTx(cid, targetId, 'wire_in', amount, locale('tx_wire_from', Config.Banks[bankId].label))
+        notify(src, 'sv_transferred', 'success', amount, toLabel, fee)
+        local fromLabel = Config.Banks[bankId].label
+        BankLog('transfer', src, {
+            { name = 'From', value = fromLabel, inline = true },
+            { name = 'To', value = toLabel, inline = true },
+            { name = 'Amount', value = BankMoney(amount), inline = true },
+            { name = 'Fee', value = BankMoney(fee), inline = true },
+            { name = 'Total Debited', value = BankMoney(total), inline = true },
+        })
+        BankLogLarge('Wire', src, fromLabel, amount, { { name = 'To', value = toLabel, inline = true } })
+    end)
 end)
 
----------------------------------
--- create blood money clip command
----------------------------------
-RSGCore.Commands.Add('bloodmoneyclip', locale('sv_lang_14'), {{ name = 'amount', help = locale('sv_lang_15') }}, true, function(source, args)
-    local src = source
-    local args1 = tonumber(args[1])
+AddEventHandler('playerDropped', function()
+    busy[source], lastCall[source] = nil, nil
+end)
 
-    if args1 <= 0 then
-        lib.notify({ title = locale('sv_lang_2'), description = locale('sv_lang_8'), type = 'error' })
-        return
-    end
+---------------------------------------------------------------------
+-- exports for other resources (server-side only)
+---------------------------------------------------------------------
+exports('HasAccount', hasAccount)
 
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
+exports('GetBranchBalance', function(citizenid, bankId)
+    return getBalance(citizenid, bankId) or 0
+end)
 
-    local money = Player.Functions.GetMoney('bloodmoney')
-    if money and money >= args1 then
-        if Player.Functions.RemoveMoney('bloodmoney', args1, 'give-blood-money') then
-            local info =
-            {
-                money = args1
-            }
+exports('GetTotalBalance', function(citizenid)
+    return tonumber(MySQL.scalar.await('SELECT COALESCE(SUM(balance), 0) FROM rsg_bank_accounts WHERE citizenid = ?', { citizenid })) or 0
+end)
 
-            Player.Functions.AddItem('blood_money_clip', 1, false, info)
-            lib.notify({ title = locale('sv_lang_16'), description = locale('sv_lang_10') ..' ' .. args1 ..' ' .. locale('sv_lang_17'), type = 'success' })
-        end
-    end
-end, 'user')
+exports('AddBranchMoney', function(citizenid, bankId, amount, note)
+    amount = round(tonumber(amount) or 0)
+    if amount <= 0 or not Config.Banks[bankId] or not credit(citizenid, bankId, amount) then return false end
+    logTx(citizenid, bankId, 'deposit', amount, note)
+    BankLog('export', nil, {
+        { name = 'Action', value = 'AddBranchMoney', inline = true },
+        { name = 'Resource', value = GetInvokingResource() or 'unknown', inline = true },
+        { name = 'Citizen ID', value = citizenid, inline = true },
+        { name = 'Branch', value = Config.Banks[bankId].label, inline = true },
+        { name = 'Amount', value = BankMoney(amount), inline = true },
+        { name = 'Note', value = note, inline = false },
+    })
+    return true
+end)
 
----------------------------------
--- target give money transfer
----------------------------------
-RegisterNetEvent('rsg-banking:server:givemoney', function(targetPlayerId, amount)
-    local src = source
-    if isRateLimited(src, 'givemoney') then return end
-    local targetId = tonumber(targetPlayerId)
-    amount = math.round(amount, 2)
-    if amount <= 0 then
-        TriggerClientEvent('lib.notify', src, { title = locale('sv_lang_18'), description = locale('sv_lang_26'), type = 'error' })
-        print(('[%s] Player %s attempted transfer with invalid amount: %s'):format(GetCurrentResourceName(), src, amount))
-        return
-    end
-    if amount > Config.MaxTransfer then
-        TriggerClientEvent('lib.notify', src, { title = locale('sv_lang_18'), description = locale('sv_lang_26'), type = 'error' })
-        print(('[%s] Player %s exceeded max transfer amount: %s > %s'):format(GetCurrentResourceName(), src, amount, Config.MaxTransfer))
-        return
-    end
-    local Player = RSGCore.Functions.GetPlayer(src)
-    local targetPlayer = RSGCore.Functions.GetPlayer(targetId)
-    
-    if not Player then
-        TriggerClientEvent('lib.notify', src, { title = locale('sv_lang_18'), description = locale('sv_lang_19'), type = 'error' })
-        return
-    end
-
-    if not targetPlayer then
-        TriggerClientEvent('lib.notify', src, { title = locale('sv_lang_18'), description = locale('sv_lang_20'), type = 'error' })
-        return
-    end
-
-    if Player.Functions.GetMoney('cash') >= amount then
-        Player.Functions.RemoveMoney('cash', amount)
-        targetPlayer.Functions.AddMoney('cash', amount)
-        TriggerClientEvent('lib.notify', Player.PlayerData.source, { title = locale('sv_lang_21'), description = locale('sv_lang_22') .. amount .. locale('sv_lang_23') .. targetPlayer.PlayerData.charinfo.firstname, type = 'success' })
-        TriggerClientEvent('lib.notify', targetPlayer.PlayerData.source, { title = locale('sv_lang_21'), description = locale('sv_lang_24') .. amount .. locale('sv_lang_25') .. Player.PlayerData.charinfo.firstname, type = 'success' })
-        if Config.Discord.TrackTransfers and amount >= Config.Discord.TransactionThreshold then
-            local senderName = Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname
-            local receiverName = targetPlayer.PlayerData.charinfo.firstname .. " " .. targetPlayer.PlayerData.charinfo.lastname
-            SendDiscordWebhook(senderName, receiverName, amount, "Player to Player Transfer")
-        end
-    else
-        TriggerClientEvent('lib.notify', Player.PlayerData.source, { title = locale('sv_lang_18'), description = locale('sv_lang_26'), type = 'error' })
-        print(('[%s] Player %s insufficient cash for transfer of %s'):format(GetCurrentResourceName(), src, amount))
-    end
+exports('RemoveBranchMoney', function(citizenid, bankId, amount, note)
+    amount = round(tonumber(amount) or 0)
+    if amount <= 0 or not Config.Banks[bankId] or not debit(citizenid, bankId, amount) then return false end
+    logTx(citizenid, bankId, 'withdraw', amount, note)
+    BankLog('export', nil, {
+        { name = 'Action', value = 'RemoveBranchMoney', inline = true },
+        { name = 'Resource', value = GetInvokingResource() or 'unknown', inline = true },
+        { name = 'Citizen ID', value = citizenid, inline = true },
+        { name = 'Branch', value = Config.Banks[bankId].label, inline = true },
+        { name = 'Amount', value = BankMoney(amount), inline = true },
+        { name = 'Note', value = note, inline = false },
+    })
+    return true
 end)

@@ -62,3 +62,4 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 .center{text-align:center}
 .row-sub.closed{color:var(--rdr-cost-over)}
 .empty{text-align:center;font-style:italic;color:var(--rdr-muted);padding:20px 0}
+.home-btn{padding:3px 8px;font-size:10px;margin-left:6px;width:auto}

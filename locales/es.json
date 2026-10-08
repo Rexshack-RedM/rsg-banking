@@ -56,5 +56,9 @@
     "ui_no_transactions": "Aún no hay transacciones en esta sucursal.",
     "cl_closing_soon": "El banco cierra a las %s:00. Por favor, termina tus gestiones.",
     "cl_bank_closed_leave": "El banco ya está cerrado. Por favor, dirígete a la salida.",
-    "cl_escorted_out": "El banco está cerrado. El personal te ha acompañado a la salida."
+    "cl_escorted_out": "El banco está cerrado. El personal te ha acompañado a la salida.",
+    "sv_home_set": "%s is now your home branch. Paychecks will be paid here.",
+    "ui_pill_home": "Home",
+    "ui_make_home": "Make Home",
+    "ui_home_hint": "Paychecks are paid into your home branch"
 }

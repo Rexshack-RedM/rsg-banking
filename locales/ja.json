@@ -56,5 +56,9 @@
     "ui_no_transactions": "この支店での取引はまだありません。",
     "cl_closing_soon": "銀行は %s:00 に閉まります。用事をお済ませください。",
     "cl_bank_closed_leave": "銀行は閉店しました。出口へお進みください。",
-    "cl_escorted_out": "銀行は閉店しました。職員があなたを外へ案内しました。"
+    "cl_escorted_out": "銀行は閉店しました。職員があなたを外へ案内しました。",
+    "sv_home_set": "%s is now your home branch. Paychecks will be paid here.",
+    "ui_pill_home": "Home",
+    "ui_make_home": "Make Home",
+    "ui_home_hint": "Paychecks are paid into your home branch"
 }

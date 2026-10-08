@@ -56,5 +56,9 @@
     "ui_no_transactions": "No transactions at this branch yet.",
     "cl_closing_soon": "The bank closes at %s:00. Please finish your business.",
     "cl_bank_closed_leave": "The bank is now closed. Please make your way out.",
-    "cl_escorted_out": "The bank is closed. Staff have shown you out."
+    "cl_escorted_out": "The bank is closed. Staff have shown you out.",
+    "sv_home_set": "%s is now your home branch. Paychecks will be paid here.",
+    "ui_pill_home": "Home",
+    "ui_make_home": "Make Home",
+    "ui_home_hint": "Paychecks are paid into your home branch"
 }

@@ -64,9 +64,12 @@ function render(d) {
       <div class="badge">&#127974;</div>
       <div class="row-main"><div class="row-title">${esc(b.label)}</div>
         <div class="row-sub ${b.open ? '' : 'closed'}">${!b.open ? t('ui_branch_no_account') : b.id === d.bankId ? t('ui_branch_here') : t('ui_branch_visit')}</div></div>
+      ${b.id === d.homeBank ? `<span class="pill">${esc(t('ui_pill_home'))}</span>` : ''}
       ${b.id === d.bankId ? `<span class="pill">${esc(t('ui_pill_here'))}</span>` : ''}
+      ${b.id === d.bankId && b.open && b.id !== d.homeBank ? `<button class="wood-btn home-btn" title="${esc(t('ui_home_hint'))}">${esc(t('ui_make_home'))}</button>` : ''}
       <div class="amt ${b.balance > 0 ? 'pos' : ''}">${fmt(b.balance)}</div>
     </div>`).join('');
+  document.querySelectorAll('.home-btn').forEach(b => b.onclick = () => act('setHome', {}));
 
   $('ledgerList').innerHTML = d.history.length ? d.history.map(h => {
     const tx = TX[h.type] || { icon: '&#8226;', label: h.type, sign: 1 };

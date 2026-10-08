@@ -37,6 +37,26 @@ local tables = {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ]]
     },
+    {
+        name = 'rsg_bank_home',
+        sql = [[
+            CREATE TABLE IF NOT EXISTS `rsg_bank_home` (
+                `citizenid` VARCHAR(50) NOT NULL,
+                `bank` VARCHAR(50) NOT NULL,
+                PRIMARY KEY (`citizenid`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ]]
+    },
+    {
+        name = 'rsg_bank_meta',
+        sql = [[
+            CREATE TABLE IF NOT EXISTS `rsg_bank_meta` (
+                `k` VARCHAR(50) NOT NULL,
+                `v` VARCHAR(255) DEFAULT NULL,
+                PRIMARY KEY (`k`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ]]
+    },
 }
 
 local function log(color, msg)

@@ -56,5 +56,9 @@
     "ui_no_transactions": "Καμία συναλλαγή σε αυτό το υποκατάστημα ακόμα.",
     "cl_closing_soon": "Η τράπεζα κλείνει στις %s:00. Παρακαλώ ολοκλήρωσε τις συναλλαγές σου.",
     "cl_bank_closed_leave": "Η τράπεζα έκλεισε. Παρακαλώ κατευθύνσου προς την έξοδο.",
-    "cl_escorted_out": "Η τράπεζα είναι κλειστή. Το προσωπικό σε συνόδευσε έξω."
+    "cl_escorted_out": "Η τράπεζα είναι κλειστή. Το προσωπικό σε συνόδευσε έξω.",
+    "sv_home_set": "%s is now your home branch. Paychecks will be paid here.",
+    "ui_pill_home": "Home",
+    "ui_make_home": "Make Home",
+    "ui_home_hint": "Paychecks are paid into your home branch"
 }

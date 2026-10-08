@@ -19,3 +19,15 @@ CREATE TABLE IF NOT EXISTS `rsg_bank_transactions` (
     PRIMARY KEY (`id`),
     KEY `citizen_bank_idx` (`citizenid`, `bank`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `rsg_bank_home` (
+    `citizenid` VARCHAR(50) NOT NULL,
+    `bank` VARCHAR(50) NOT NULL,
+    PRIMARY KEY (`citizenid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `rsg_bank_meta` (
+    `k` VARCHAR(50) NOT NULL,
+    `v` VARCHAR(255) DEFAULT NULL,
+    PRIMARY KEY (`k`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -56,5 +56,9 @@
     "ui_no_transactions": "Brak transakcji w tym oddziale.",
     "cl_closing_soon": "Bank zamyka się o %s:00. Dokończ swoje sprawy.",
     "cl_bank_closed_leave": "Bank jest już zamknięty. Kieruj się do wyjścia.",
-    "cl_escorted_out": "Bank jest zamknięty. Personel wyprowadził cię na zewnątrz."
+    "cl_escorted_out": "Bank jest zamknięty. Personel wyprowadził cię na zewnątrz.",
+    "sv_home_set": "%s is now your home branch. Paychecks will be paid here.",
+    "ui_pill_home": "Home",
+    "ui_make_home": "Make Home",
+    "ui_home_hint": "Paychecks are paid into your home branch"
 }

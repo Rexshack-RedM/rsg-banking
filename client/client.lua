@@ -27,7 +27,7 @@ local UI_KEYS = {
     'ui_amount', 'ui_all_cash', 'ui_all_vault', 'ui_deposit', 'ui_withdraw', 'ui_no_other_title', 'ui_no_other_desc',
     'ui_wire_desc', 'ui_send_wire', 'ui_fee_info', 'ui_opening_fee', 'ui_free_to_open', 'ui_tx_deposit', 'ui_tx_withdraw',
     'ui_tx_wire_in', 'ui_tx_wire_out', 'ui_tx_opened', 'ui_branch_no_account', 'ui_branch_here', 'ui_branch_visit',
-    'ui_pill_here', 'ui_free', 'ui_no_transactions',
+    'ui_pill_here', 'ui_free', 'ui_no_transactions', 'ui_pill_home', 'ui_make_home', 'ui_home_hint',
 }
 local uiLocales
 
@@ -60,6 +60,11 @@ RegisterNUICallback('close', function(_, cb) closeUI(); cb('ok') end)
 
 RegisterNUICallback('openAccount', function(_, cb)
     if currentBank then pushData(lib.callback.await('rsg-banking:server:openAccount', false, currentBank)) end
+    cb('ok')
+end)
+
+RegisterNUICallback('setHome', function(_, cb)
+    if currentBank then pushData(lib.callback.await('rsg-banking:server:setHome', false, currentBank)) end
     cb('ok')
 end)
 

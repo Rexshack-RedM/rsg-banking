@@ -101,6 +101,7 @@ local function buildData(src, bankId)
         feePercent = Config.TransferFeePercent,
         minFee     = Config.TransferMinFee,
         branches   = branches,
+        homeBank   = GetHomeBranch and GetHomeBranch(cid) or nil,
         history    = history,
     }
 end
@@ -145,6 +146,10 @@ lib.callback.register('rsg-banking:server:openAccount', function(src, bankId)
             return notify(src, 'sv_account_exists', 'error')
         end
         logTx(cid, bankId, 'opened', fee, nil)
+        if not GetHomeBranch(cid) then
+            SetHomeBranch(cid, bankId)
+            exports['rsg-banking']:SweepCoreBank(src) -- anything waiting in core 'bank' money
+        end
         notify(src, 'sv_account_opened', 'success', Config.Banks[bankId].label)
         BankLog('account_opened', src, {
             { name = 'Branch', value = Config.Banks[bankId].label, inline = true },
@@ -224,6 +229,14 @@ lib.callback.register('rsg-banking:server:transfer', function(src, bankId, targe
             { name = 'Total Debited', value = BankMoney(total), inline = true },
         })
         BankLogLarge('Wire', src, fromLabel, amount, { { name = 'To', value = toLabel, inline = true } })
+    end)
+end)
+
+lib.callback.register('rsg-banking:server:setHome', function(src, bankId)
+    return guarded(src, bankId, function(_, cid)
+        if not hasAccount(cid, bankId) then return notify(src, 'sv_no_account', 'error') end
+        SetHomeBranch(cid, bankId)
+        notify(src, 'sv_home_set', 'success', Config.Banks[bankId].label)
     end)
 end)
 

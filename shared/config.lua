@@ -26,6 +26,12 @@ Config.Closing = {
 -- Add `exit = vector4(x, y, z, heading)` to a bank below (a spot on the street outside its front door)
 -- to enable escorting for that bank. Banks without an exit just keep their doors usable from inside.
 
+-- Home branch: paychecks (and anything paid into RSG-Core 'bank' money) go here.
+-- The first account a player opens becomes their home; they can change it at any counter.
+Config.DefaultHomeBank  = 'valentine'  -- used by the migration for players with no accounts yet
+Config.ForwardCoreBank  = true         -- move money other scripts add to RSG-Core 'bank' into the home branch
+Config.MigrateCoreMoney = true         -- one-off: move old bank/valbank/rhobank/blkbank/armbank money into branches
+
 -- Wiring money between branches
 Config.TransferFeePercent = 5          -- % fee charged on branch-to-branch wires
 Config.TransferMinFee     = 1          -- minimum fee in $

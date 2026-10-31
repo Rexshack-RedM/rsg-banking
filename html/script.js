@@ -17,7 +17,31 @@ function post(name, body = {}) {
   return fetch(`https://${RES}/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
 }
 
+// pure HTML dropdown: el = .dd container, options = [{ value, label }]
+function setupDd(el, options, value, onChange) {
+  const menu = el.querySelector('.dd-menu'), shown = el.querySelector('.dd-value');
+  const pick = v => {
+    const o = options.find(x => x.value === v) || options[0];
+    el.dataset.value = o ? o.value : '';
+    shown.textContent = o ? o.label : '';
+    menu.querySelectorAll('.dd-opt').forEach(x => x.classList.toggle('sel', x.dataset.value === el.dataset.value));
+  };
+  menu.innerHTML = options.map(o => `<div class="dd-opt" data-value="${esc(o.value)}">${esc(o.label)}</div>`).join('');
+  menu.querySelectorAll('.dd-opt').forEach(x => x.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation(); pick(x.dataset.value); closeDds(); onChange && onChange(el.dataset.value);
+  }));
+  el.onmousedown = e => {
+    if (e.target.closest('.dd-menu')) return;
+    const open = !el.classList.contains('open'); closeDds();
+    el.classList.toggle('open', open); menu.classList.toggle('hidden', !open);
+  };
+  pick(value);
+}
+function closeDds() { document.querySelectorAll('.dd').forEach(d => { d.classList.remove('open'); d.querySelector('.dd-menu').classList.add('hidden'); }); }
+document.addEventListener('mousedown', e => { if (!e.target.closest('.dd')) closeDds(); });
+
 function setTab(tab) {
+  closeDds();
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   ['vault', 'wire', 'branches', 'ledger', 'loans', 'lockbox'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== tab));
 }
@@ -140,10 +164,9 @@ function render(d) {
   const others = d.branches.filter(b => b.id !== d.bankId && b.open);
   $('wireEmpty').classList.toggle('hidden', others.length > 0);
   $('wireForm').classList.toggle('hidden', others.length === 0);
-  const sel = $('wireTarget'), prev = sel.value;
-  sel.innerHTML = others
-    .map(b => `<option value="${esc(b.id)}">${esc(b.label)} — ${fmt(b.balance)}</option>`).join('');
-  if (prev && others.some(b => b.id === prev)) sel.value = prev;
+  const dd = $('wireTarget'), prev = dd.dataset.value;
+  setupDd(dd, others.map(b => ({ value: b.id, label: `${b.label} — ${fmt(b.balance)}` })),
+    others.some(b => b.id === prev) ? prev : (others[0] && others[0].id));
 
   $('branchList').innerHTML = d.branches.map(b => `
     <div class="row">
@@ -177,13 +200,13 @@ async function act(name, body) {
   setTimeout(() => { busy = false; document.querySelectorAll('.wood-btn').forEach(b => b.disabled = false); if (state) { $('openBtn').disabled = (state.cash || 0) < (state.openFee || 0); $('boxUpgradeBtn').disabled = !!$('boxUpgradeBtn').dataset.locked; } }, 500);
 }
 
-function close() { $('app').classList.add('hidden'); post('close'); }
+function close() { closeDds(); $('app').classList.add('hidden'); post('close'); }
 
 window.addEventListener('message', e => {
   const m = e.data;
   if (m.action === 'open') { if (m.locales) { L = m.locales; applyI18n(); } render(m.data); setTab('vault'); $('amount').value = ''; $('wireAmount').value = ''; $('loanAmount').value = ''; $('loanPayAmount').value = ''; $('boxQty').value = ''; $('app').classList.remove('hidden'); window.restorePanelPos && window.restorePanelPos(); }
   else if (m.action === 'update') render(m.data);
-  else if (m.action === 'close') $('app').classList.add('hidden');
+  else if (m.action === 'close') { closeDds(); $('app').classList.add('hidden'); }
 });
 
 document.querySelectorAll('[data-tab]').forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
@@ -193,7 +216,7 @@ document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () =
 }));
 $('depositBtn').onclick = () => { const a = parseFloat($('amount').value); if (a > 0) act('deposit', { amount: a }); };
 $('withdrawBtn').onclick = () => { const a = parseFloat($('amount').value); if (a > 0) act('withdraw', { amount: a }); };
-$('wireBtn').onclick = () => { const a = parseFloat($('wireAmount').value), t = $('wireTarget').value; if (a > 0 && t) act('transfer', { target: t, amount: a }); };
+$('wireBtn').onclick = () => { const a = parseFloat($('wireAmount').value), t = $('wireTarget').dataset.value; if (a > 0 && t) act('transfer', { target: t, amount: a }); };
 $('openBtn').onclick = () => act('openAccount', {});
 $('wireAmount').addEventListener('input', calcFee);
 $('loanAmount').addEventListener('input', loanRepayInfo);

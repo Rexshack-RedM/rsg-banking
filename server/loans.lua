@@ -53,7 +53,7 @@ function BuildLoanData(cid, bankId, owned)
     }
 end
 
-lib.callback.register('rsg-banking:server:takeLoan', function(src, bankId, amount)
+Bank.register('rsg-banking:server:takeLoan', function(src, bankId, amount)
     return Bank.guarded(src, bankId, function(Player, cid)
         if not LC.enabled then return end
         if not Bank.hasAccount(cid, bankId) then return Bank.notify(src, 'sv_no_account', 'error') end
@@ -90,7 +90,7 @@ lib.callback.register('rsg-banking:server:takeLoan', function(src, bankId, amoun
 end)
 
 -- method: 'bank' (from this branch vault) or 'cash'
-lib.callback.register('rsg-banking:server:repayLoan', function(src, bankId, amount, method)
+Bank.register('rsg-banking:server:repayLoan', function(src, bankId, amount, method)
     return Bank.guarded(src, bankId, function(Player, cid)
         if not LC.enabled then return end
         local loan = getLoan(cid, bankId)
@@ -143,7 +143,8 @@ local function processOverdue()
 
         if not isLate(loan.late) then
             local penalty = Bank.round(owed * (LC.latePenaltyPercent or 0) / 100)
-            MySQL.update.await('UPDATE rsg_bank_loans SET owed = owed + ?, late = 1 WHERE id = ? AND late = 0', { penalty, loan.id })
+            local n = MySQL.update.await('UPDATE rsg_bank_loans SET owed = owed + ?, late = 1 WHERE id = ? AND late = 0', { penalty, loan.id })
+            if (n or 0) == 0 then penalty = 0 end -- already marked late elsewhere
             owed = Bank.round(owed + penalty)
             if penalty > 0 then Bank.logTx(cid, bankId, 'loan_late', penalty, locale('tx_loan_late')) end
             notifyCid(cid, 'sv_loan_overdue', 'error', label, Bank.money(owed))

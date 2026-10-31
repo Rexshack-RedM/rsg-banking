@@ -1,5 +1,4 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
-lib.locale()
 
 local busy     = {}   -- [src] = true while a transaction is running
 local lastCall = {}   -- [src] = GetGameTimer() of last request (rate limit)
@@ -11,7 +10,7 @@ local function round(n) return math.floor(n * 100 + 0.5) / 100 end
 local function m(n) return ('%.2f'):format(tonumber(n) or 0) end -- money for notifications
 
 local function notify(src, key, ntype, ...)
-    TriggerClientEvent('ox_lib:notify', src, {
+    TriggerClientEvent('RSGCore:Client:Notify', src, {
         title = locale('cl_title'), description = locale(key, ...), type = ntype or 'inform', duration = 5000
     })
 end
@@ -29,6 +28,16 @@ local function nearBank(src, bankId)
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return false end
     return #(GetEntityCoords(ped) - bank.coords) <= Config.ServerMaxDistance
+end
+
+-- Opening hours checked on the server too (rsg-weather clock). Falls back to allowing if rsg-weather is unavailable.
+local function bankOpen()
+    if not Config.UseHours then return true end
+    local ok, t = pcall(function() return exports['rsg-weather']:getTime() end)
+    local h = ok and type(t) == 'table' and tonumber(t.hour)
+    if not h then return true end
+    if Config.OpenHour < Config.CloseHour then return h >= Config.OpenHour and h < Config.CloseHour end
+    return h >= Config.OpenHour or h < Config.CloseHour
 end
 
 local function validAmount(src, amount)
@@ -102,10 +111,10 @@ local function buildData(src, bankId)
         feePercent = Config.TransferFeePercent,
         minFee     = Config.TransferMinFee,
         branches   = branches,
-        homeBank   = GetHomeBranch and GetHomeBranch(cid) or nil,
+        homeBank   = GetHomeBranch(cid),
         history    = history,
-        loan       = BuildLoanData and BuildLoanData(cid, bankId, owned) or nil,
-        lockbox    = BuildLockboxData and BuildLockboxData(Player, bankId) or nil,
+        loan       = BuildLoanData(cid, bankId, owned),
+        lockbox    = BuildLockboxData(Player, bankId),
     }
 end
 
@@ -115,6 +124,10 @@ local function guarded(src, bankId, fn)
     if not nearBank(src, bankId) then
         notify(src, 'sv_too_far', 'error')
         BankLogSuspicious(src, 'Transaction attempted away from the bank', bankId)
+        return nil
+    end
+    if not bankOpen() then
+        notify(src, 'cl_bank_closed', 'error', Config.OpenHour, Config.CloseHour)
         return nil
     end
     local Player = RSGCore.Functions.GetPlayer(src)
@@ -127,22 +140,32 @@ local function guarded(src, bankId, fn)
     return buildData(src, bankId)
 end
 
--- shared with server/loans.lua and server/lockbox.lua
+-- rsg-core callback wrapper: handler returns the value, errors never leave the client waiting
+local function register(name, fn)
+    RSGCore.Functions.CreateCallback(name, function(src, cb, ...)
+        local ok, res = pcall(fn, src, ...)
+        if not ok then print(('[rsg-banking] ^1%s error:^7 %s'):format(name, res)) end
+        cb(ok and res or nil)
+    end)
+end
+
+-- shared with server/loans.lua, server/lockbox.lua and server/homebank.lua
 Bank = {
-    round = round, money = m, notify = notify, guarded = guarded, validAmount = validAmount,
+    round = round, money = m, notify = notify, guarded = guarded, validAmount = validAmount, register = register,
     getBalance = getBalance, hasAccount = hasAccount, credit = credit, debit = debit, logTx = logTx,
 }
 
 ---------------------------------------------------------------------
 -- callbacks
 ---------------------------------------------------------------------
-lib.callback.register('rsg-banking:server:getData', function(src, bankId)
+register('rsg-banking:server:getData', function(src, bankId)
     if not BankingDBReady or rateLimited(src) then return nil end
     if not nearBank(src, bankId) then BankLogBlocked(src, 'Menu request away from the bank', tostring(bankId)); return nil end
+    if not bankOpen() then notify(src, 'cl_bank_closed', 'error', Config.OpenHour, Config.CloseHour); return nil end
     return buildData(src, bankId)
 end)
 
-lib.callback.register('rsg-banking:server:openAccount', function(src, bankId)
+register('rsg-banking:server:openAccount', function(src, bankId)
     return guarded(src, bankId, function(Player, cid)
         if hasAccount(cid, bankId) then return notify(src, 'sv_account_exists', 'error') end
         local fee = math.max(0, tonumber(Config.AccountOpenFee) or 0)
@@ -167,7 +190,7 @@ lib.callback.register('rsg-banking:server:openAccount', function(src, bankId)
     end)
 end)
 
-lib.callback.register('rsg-banking:server:deposit', function(src, bankId, amount)
+register('rsg-banking:server:deposit', function(src, bankId, amount)
     return guarded(src, bankId, function(Player, cid)
         if not hasAccount(cid, bankId) then return notify(src, 'sv_no_account', 'error') end
         amount = validAmount(src, amount); if not amount then return end
@@ -190,7 +213,7 @@ lib.callback.register('rsg-banking:server:deposit', function(src, bankId, amount
     end)
 end)
 
-lib.callback.register('rsg-banking:server:withdraw', function(src, bankId, amount)
+register('rsg-banking:server:withdraw', function(src, bankId, amount)
     return guarded(src, bankId, function(Player, cid)
         amount = validAmount(src, amount); if not amount then return end
         if not debit(cid, bankId, amount) then return notify(src, 'sv_not_enough_balance', 'error') end
@@ -207,7 +230,7 @@ lib.callback.register('rsg-banking:server:withdraw', function(src, bankId, amoun
     end)
 end)
 
-lib.callback.register('rsg-banking:server:transfer', function(src, bankId, targetId, amount)
+register('rsg-banking:server:transfer', function(src, bankId, targetId, amount)
     return guarded(src, bankId, function(_, cid)
         if type(targetId) ~= 'string' or not Config.Banks[targetId] then return end
         if targetId == bankId then return notify(src, 'sv_same_bank', 'error') end
@@ -241,7 +264,7 @@ lib.callback.register('rsg-banking:server:transfer', function(src, bankId, targe
     end)
 end)
 
-lib.callback.register('rsg-banking:server:setHome', function(src, bankId)
+register('rsg-banking:server:setHome', function(src, bankId)
     return guarded(src, bankId, function(_, cid)
         if not hasAccount(cid, bankId) then return notify(src, 'sv_no_account', 'error') end
         SetHomeBranch(cid, bankId)

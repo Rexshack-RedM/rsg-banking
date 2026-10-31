@@ -14,7 +14,7 @@ local LEGACY = {
     armbank = 'armadillo',
 }
 
-local function round(n) return math.floor(n * 100 + 0.5) / 100 end
+local round = Bank.round
 
 function GetHomeBranch(cid)
     local bank = MySQL.scalar.await('SELECT bank FROM rsg_bank_home WHERE citizenid = ?', { cid })

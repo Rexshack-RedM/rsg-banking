@@ -33,7 +33,18 @@ html,body{width:100%;height:100%;background:transparent;overflow:hidden;user-sel
 .desc{font-style:italic;color:var(--rdr-muted);font-size:13px}
 .input{width:100%;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--rdr-text);background:rgba(0,0,0,.35);border:1px solid var(--rdr-gold-dim);border-radius:2px;outline:none;transition:.15s ease}
 .input:focus{border-color:var(--rdr-gold);box-shadow:0 0 0 2px rgba(201,162,75,.15)}
-select.input option{background:#141414}
+/* custom dropdown (no native <select> in RedM CEF) */
+.dd{position:relative;display:flex;align-items:center;cursor:pointer}
+.dd-value{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dd-arrow{color:var(--rdr-muted);transition:transform .15s ease;margin-left:8px}
+.dd.open{border-color:var(--rdr-gold);box-shadow:0 0 0 2px rgba(201,162,75,.15)}
+.dd.open .dd-arrow{transform:rotate(180deg)}
+.dd-menu{position:absolute;left:-1px;right:-1px;top:calc(100% + 2px);z-index:20;max-height:200px;overflow-y:auto;border:1px solid var(--rdr-gold-dim);border-radius:2px;
+ background:linear-gradient(160deg,var(--rdr-panel-2),var(--rdr-panel) 60%,var(--rdr-black));box-shadow:0 10px 30px var(--rdr-shadow)}
+.dd-menu::-webkit-scrollbar{width:4px}.dd-menu::-webkit-scrollbar-thumb{background:var(--rdr-gold-dim)}
+.dd-opt{padding:8px 12px;font-size:13px;color:var(--rdr-muted);border-bottom:1px solid rgba(255,255,255,.04);transition:.15s ease}
+.dd-opt:hover{color:var(--rdr-text);background:rgba(255,255,255,.04);padding-left:16px}
+.dd-opt.sel{color:var(--rdr-text);font-weight:500}
 input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none}
 .quick{display:flex;gap:6px;flex-wrap:wrap}
 .chip{padding:4px 9px;font-size:11px;text-transform:uppercase;letter-spacing:1px;border:1px solid var(--rdr-gold-dim);border-radius:2px;cursor:pointer;color:var(--rdr-muted);transition:.15s ease}

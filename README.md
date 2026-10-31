@@ -12,18 +12,19 @@ Branch banking for RSG-Core (RedM). Every town bank is its own institution: mone
 - Opening hours: map blips turn green/red, main doors unlock/lock, menu closes at closing time
 - Automatic database setup (or manual SQL)
 - Draggable UI that remembers its position (double-click the header to re-centre)
-- Server-side validation: distance check, amount limits, per-player lock and rate limit, atomic balance updates with refunds on failure
+- Server-side validation: distance check, opening hours (via rsg-weather), amount limits, per-player lock and rate limit, atomic balance updates with refunds on failure
+- No ox_lib: notifications, callbacks and locales all come from rsg-core
 
 ## Requirements
-- rsg-core
-- ox_lib
+- rsg-core (3.0.3+)
+- rsg-inventory
 - oxmysql
-- rsg-inventory (for lockboxes)
+- rsg-weather (optional: used for the server-side opening hours check; without it hours are client-side only)
 - OneSync (used for the server-side distance check)
 
 ## Installation
 1. Drop `rsg-banking` into your resources folder.
-2. Add `ensure rsg-banking` to server.cfg **after** rsg-core, ox_lib and oxmysql.
+2. Add `ensure rsg-banking` to server.cfg **after** rsg-core, rsg-inventory and oxmysql.
 3. Database (choose one):
    - **Automatic (default):** `Config.AutoDatabase = true`. Tables are created on first start.
    - **Manual:** set `Config.AutoDatabase = false` and import `installation/rsg_banking.sql`.
@@ -92,7 +93,7 @@ exports['rsg-banking']:GetLockboxItems(citizenid, bankId)           -- { [item] 
 
 ## Notes
 - Branch balances are separate from RSG-Core's built-in `bank` money.
-- Opening hours use each player's game clock, so they are enforced in the client UI, not on the server.
+- Opening hours are checked in the client UI and again on the server against rsg-weather's clock, so a modified client can't bank after closing.
 
 ## Discord webhooks
 All webhook settings live in `server/sv_config.lua`, which is **server-only** and never sent to players, so your URLs stay private.
@@ -119,5 +120,8 @@ Messages are queued and sent one at a time, and Discord rate-limit responses are
 ## Languages
 All player-facing text (notifications, prompts and the whole UI) comes from `locales/*.json`.
 Included: `en`, `de`, `el`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`.
-Set the language in server.cfg with ox_lib's convar, e.g. `setr ox:locale "de"`.
+Set the language in server.cfg with rsg-core's convar, e.g. `setr rsg:locale "de"` (falls back to `ox:locale`, then `en`).
 Discord webhook logs and console messages stay in English for staff.
+
+## Support
+Support: https://buymeacoffee.com/rexshack

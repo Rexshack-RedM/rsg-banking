@@ -35,11 +35,7 @@ end
 
 -- how many of an item the player is carrying
 local function countItem(Player, name)
-    local n = 0
-    for _, it in pairs(Player.PlayerData.items or {}) do
-        if it and it.name == name then n = n + (tonumber(it.amount) or 0) end
-    end
-    return n
+    return tonumber(exports['rsg-inventory']:GetItemCount(Player.PlayerData.source, name)) or 0
 end
 
 local function canUpgrade(box)
@@ -62,11 +58,6 @@ local function refund(Player, cid, bankId, price)
     if price <= 0 then return end
     if XC.payWith == 'cash' then Player.Functions.AddMoney('cash', price, 'bank-lockbox-refund')
     else Bank.credit(cid, bankId, price) end
-end
-
-local function itemBox(src, name, kind, amount)
-    local it = RSGCore.Shared.Items[name]
-    if it then TriggerClientEvent('rsg-inventory:client:ItemBox', src, it, kind, amount) end
 end
 
 -- data for the NUI
@@ -116,7 +107,7 @@ function BuildLockboxData(Player, bankId)
     return data
 end
 
-lib.callback.register('rsg-banking:server:buyLockbox', function(src, bankId, size)
+Bank.register('rsg-banking:server:buyLockbox', function(src, bankId, size)
     return Bank.guarded(src, bankId, function(Player, cid)
         if not XC.enabled then return end
         local s = type(size) == 'string' and XC.sizes[size]
@@ -141,7 +132,7 @@ lib.callback.register('rsg-banking:server:buyLockbox', function(src, bankId, siz
     end)
 end)
 
-lib.callback.register('rsg-banking:server:upgradeLockbox', function(src, bankId)
+Bank.register('rsg-banking:server:upgradeLockbox', function(src, bankId)
     return Bank.guarded(src, bankId, function(Player, cid)
         if not XC.enabled then return end
         local box = getBox(cid, bankId)
@@ -174,7 +165,7 @@ local function validQty(src, qty)
     return qty
 end
 
-lib.callback.register('rsg-banking:server:lockboxDeposit', function(src, bankId, item, qty)
+Bank.register('rsg-banking:server:lockboxDeposit', function(src, bankId, item, qty)
     return Bank.guarded(src, bankId, function(Player, cid)
         if not XC.enabled then return end
         if type(item) ~= 'string' or not (XC.items or {})[item] or not RSGCore.Shared.Items[item] then
@@ -191,7 +182,6 @@ lib.callback.register('rsg-banking:server:lockboxDeposit', function(src, bankId,
         MySQL.insert.await(
             'INSERT INTO rsg_bank_lockbox_items (citizenid, bank, item, amount) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE amount = amount + VALUES(amount)',
             { cid, bankId, item, qty })
-        itemBox(src, item, 'remove', qty)
         local label = itemInfo(item)
         Bank.notify(src, 'sv_lockbox_stored', 'success', qty, label)
         BankLog('lockbox', src, {
@@ -202,7 +192,7 @@ lib.callback.register('rsg-banking:server:lockboxDeposit', function(src, bankId,
     end)
 end)
 
-lib.callback.register('rsg-banking:server:lockboxWithdraw', function(src, bankId, item, qty)
+Bank.register('rsg-banking:server:lockboxWithdraw', function(src, bankId, item, qty)
     return Bank.guarded(src, bankId, function(Player, cid)
         if not XC.enabled or type(item) ~= 'string' or not RSGCore.Shared.Items[item] then return end
         qty = validQty(src, qty); if not qty then return end
@@ -221,7 +211,6 @@ lib.callback.register('rsg-banking:server:lockboxWithdraw', function(src, bankId
             return Bank.notify(src, 'sv_lockbox_cant_carry', 'error')
         end
         MySQL.update('DELETE FROM rsg_bank_lockbox_items WHERE citizenid = ? AND bank = ? AND item = ? AND amount <= 0', { cid, bankId, item })
-        itemBox(src, item, 'add', qty)
         local label = itemInfo(item)
         Bank.notify(src, 'sv_lockbox_taken', 'success', qty, label)
         BankLog('lockbox', src, {

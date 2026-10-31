@@ -71,7 +71,7 @@
       </div>
       <div class="section" id="wireForm">
         <div class="desc" data-i18n="ui_wire_desc">Wire funds from this branch to another of your accounts.</div>
-        <select id="wireTarget" class="input"></select>
+        <div class="dd input" id="wireTarget" data-value=""><span class="dd-value"></span><span class="dd-arrow">&#9662;</span><div class="dd-menu hidden"></div></div>
         <input type="number" id="wireAmount" class="input" data-i18n-ph="ui_amount" placeholder="Amount ($)" min="0" step="0.01">
         <div class="fee" id="feeInfo">Fee: $0.00 &middot; Total: $0.00</div>
         <div class="actions"><button class="wood-btn" id="wireBtn" data-i18n="ui_send_wire">Send Wire</button></div>

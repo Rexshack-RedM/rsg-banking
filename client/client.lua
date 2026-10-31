@@ -1,9 +1,13 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
-lib.locale()
 
 local blips = {}       -- [bankId] = blip
 local blipState = {}   -- [bankId] = true (open) / false (closed)
 local currentBank = nil
+local opening = false
+
+local function notify(key, ntype, duration, ...)
+    RSGCore.Functions.Notify({ title = locale('cl_title'), description = locale(key, ...), type = ntype, duration = duration or 5000 })
+end
 
 local function isOpen()
     if not Config.UseHours then return true end
@@ -20,44 +24,26 @@ local function closeUI()
     SendNUIMessage({ action = 'close' })
 end
 
--- every UI string is sent to the NUI from the active ox_lib locale
-local UI_KEYS = {
-    'ui_vault', 'ui_close', 'ui_bank', 'ui_customer', 'ui_no_account_title', 'ui_no_account_desc', 'ui_open_account',
-    'ui_branch_vault', 'ui_cash_on_hand', 'ui_tab_teller', 'ui_tab_wire', 'ui_tab_branches', 'ui_tab_ledger',
-    'ui_amount', 'ui_all_cash', 'ui_all_vault', 'ui_deposit', 'ui_withdraw', 'ui_no_other_title', 'ui_no_other_desc',
-    'ui_wire_desc', 'ui_send_wire', 'ui_fee_info', 'ui_opening_fee', 'ui_free_to_open', 'ui_tx_deposit', 'ui_tx_withdraw',
-    'ui_tx_wire_in', 'ui_tx_wire_out', 'ui_tx_opened', 'ui_branch_no_account', 'ui_branch_here', 'ui_branch_visit',
-    'ui_pill_here', 'ui_free', 'ui_no_transactions', 'ui_pill_home', 'ui_make_home', 'ui_home_hint',
-    -- loans
-    'ui_tab_loans', 'ui_loan_desc', 'ui_loan_terms', 'ui_loan_repay_total', 'ui_take_loan', 'ui_loan_owed', 'ui_loan_due',
-    'ui_loan_overdue', 'ui_loan_limit_at', 'ui_max', 'ui_pay_vault', 'ui_pay_cash', 'ui_pay_all', 'ui_loan_limit', 'ui_loan_age', 'ui_loan_borrowed',
-    'ui_tx_loan', 'ui_tx_loan_payment', 'ui_tx_loan_late', 'ui_tx_lockbox', 'ui_tx_lockbox_up',
-    -- lockbox
-    'ui_tab_lockbox', 'ui_lockbox_desc', 'ui_lockbox_accepts', 'ui_lockbox_capacity', 'ui_rent', 'ui_lockbox_used',
-    'ui_enlarge', 'ui_lockbox_maxed', 'ui_in_lockbox', 'ui_on_you', 'ui_qty', 'ui_store', 'ui_take', 'ui_lockbox_empty',
-    'ui_nothing_to_store', 'ui_paid_from_vault', 'ui_paid_cash',
-}
+-- every ui_* locale key is sent to the NUI (built once)
 local uiLocales
-
 local function getUILocales()
     if not uiLocales then
         uiLocales = {}
-        for _, k in ipairs(UI_KEYS) do uiLocales[k] = locale(k) end
+        for k in pairs(locale()) do
+            if k:sub(1, 3) == 'ui_' then uiLocales[k] = locale(k) end
+        end
     end
     return uiLocales
 end
 
-local function pushData(data)
-    if data then SendNUIMessage({ action = 'update', data = data }) end
-end
-
 RegisterNetEvent('rsg-banking:client:open', function(bankId)
-    if currentBank or not Config.Banks[bankId] then return end
+    if currentBank or opening or not Config.Banks[bankId] then return end
     if not isOpen() then
-        lib.notify({ title = locale('cl_title'), description = locale('cl_bank_closed', Config.OpenHour, Config.CloseHour), type = 'error', duration = 5000 })
-        return
+        return notify('cl_bank_closed', 'error', 5000, Config.OpenHour, Config.CloseHour)
     end
-    local data = lib.callback.await('rsg-banking:server:getData', false, bankId)
+    opening = true
+    local data = RSGCore.Functions.AwaitCallback('rsg-banking:server:getData', 10000, bankId)
+    opening = false
     if not data then return end
     currentBank = bankId
     SetNuiFocus(true, true)
@@ -73,7 +59,8 @@ local function nuiAction(name, cbName, ...)
         if currentBank then
             local params = {}
             for i, k in ipairs(args) do params[i] = d[k] end
-            pushData(lib.callback.await(cbName, false, currentBank, table.unpack(params, 1, #args)))
+            local data = RSGCore.Functions.AwaitCallback(cbName, 10000, currentBank, table.unpack(params, 1, #args))
+            if data and currentBank then SendNUIMessage({ action = 'update', data = data }) end
         end
         cb('ok')
     end)
@@ -96,9 +83,8 @@ CreateThread(function()
     while true do
         if currentBank then
             Wait(1000)
-            -- the menu may have been closed during the wait
-            local bank = currentBank and Config.Banks[currentBank]
-            if bank and (#(GetEntityCoords(cache.ped) - bank.coords) > Config.ServerMaxDistance or not isOpen()) then
+            local bank = currentBank and Config.Banks[currentBank] -- may have closed during the wait
+            if bank and (#(GetEntityCoords(PlayerPedId()) - bank.coords) > Config.ServerMaxDistance or not isOpen()) then
                 closeUI()
             end
         else
@@ -111,11 +97,9 @@ local function setBlipStatus(id, open)
     local blip = blips[id]
     if not blip or blipState[id] == open then return end
     if blipState[id] ~= nil then
-        local old = blipState[id] and Config.Blip.openColor or Config.Blip.closedColor
-        Citizen.InvokeNative(0xB059D7BD3D78C16F, blip, joaat(old)) -- BlipRemoveModifier
+        BlipRemoveModifier(blip, joaat(blipState[id] and Config.Blip.openColor or Config.Blip.closedColor))
     end
-    local new = open and Config.Blip.openColor or Config.Blip.closedColor
-    Citizen.InvokeNative(0x662D364ABF16DE2F, blip, joaat(new))     -- BlipAddModifier
+    BlipAddModifier(blip, joaat(open and Config.Blip.openColor or Config.Blip.closedColor))
     blipState[id] = open
 end
 
@@ -124,8 +108,8 @@ local doorsOpen = nil
 
 local function registerDoors()
     for _, d in ipairs(Config.BankDoors or {}) do
-        if not Citizen.InvokeNative(0xC153C43EA202C8C1, d.door) then           -- IsDoorRegisteredWithSystem
-            Citizen.InvokeNative(0xD99229FE93B46286, d.door, 1, 1, 0, 0, 0, 0)  -- AddDoorToSystemNew
+        if not IsDoorRegisteredWithSystem(d.door) then
+            Citizen.InvokeNative(0xD99229FE93B46286, d.door, 1, 1, 0, 0, 0, 0) -- _ADD_DOOR_TO_SYSTEM_NEW
         end
     end
 end
@@ -133,15 +117,14 @@ end
 local function setDoors(open, force)
     if doorsOpen == open and not force then return end
     for _, d in ipairs(Config.BankDoors or {}) do
-        local state = (d.state == 0 and open) and 0 or 1
-        Citizen.InvokeNative(0x6BAB9442830C7F53, d.door, state)                 -- DoorSystemSetDoorState
+        DoorSystemSetDoorState(d.door, (d.state == 0 and open) and 0 or 1)
     end
     doorsOpen = open
 end
 
 -- Which bank (if any) the player is standing inside
 local function bankInside()
-    local ped = cache.ped
+    local ped = PlayerPedId()
     if GetInteriorFromEntity(ped) == 0 then return nil end
     local pos = GetEntityCoords(ped)
     for id, bank in pairs(Config.Banks) do
@@ -151,20 +134,22 @@ end
 
 local function minutesToClose()
     local now = GetClockHours() * 60 + GetClockMinutes()
-    local close = Config.CloseHour * 60
-    return (close - now) % 1440
+    return (Config.CloseHour * 60 - now) % 1440
 end
 
+-- returns true if the player was moved outside
 local function escortOut(id)
     local exit = Config.Banks[id].exit
-    if not exit then return end
+    if not exit then return false end
+    local ped = PlayerPedId()
     DoScreenFadeOut(800)
     while not IsScreenFadedOut() do Wait(50) end
-    SetEntityCoords(cache.ped, exit.x, exit.y, exit.z, false, false, false, false)
-    SetEntityHeading(cache.ped, exit.w or 0.0)
+    SetEntityCoords(ped, exit.x, exit.y, exit.z, false, false, false, false)
+    SetEntityHeading(ped, exit.w or 0.0)
     Wait(500)
     DoScreenFadeIn(800)
-    lib.notify({ title = locale('cl_title'), description = locale('cl_escorted_out'), type = 'inform', duration = 6000 })
+    notify('cl_escorted_out', 'inform', 6000)
+    return true
 end
 
 local warned, closedAt = false, nil
@@ -182,9 +167,9 @@ CreateThread(function()
         if open and inside and Config.Closing.warnHours > 0 then
             if not warned and minutesToClose() <= Config.Closing.warnHours * 60 then
                 warned = true
-                lib.notify({ title = locale('cl_title'), description = locale('cl_closing_soon', Config.CloseHour), type = 'warning', duration = 7000 })
+                notify('cl_closing_soon', 'warning', 7000, Config.CloseHour)
             end
-        elseif open == false then
+        elseif not open then
             warned = false
         end
 
@@ -192,10 +177,9 @@ CreateThread(function()
         if not open and inside then
             if not closedAt then
                 closedAt = GetGameTimer()
-                lib.notify({ title = locale('cl_title'), description = locale('cl_bank_closed_leave'), type = 'warning', duration = 7000 })
+                notify('cl_bank_closed_leave', 'warning', 7000)
             elseif Config.Closing.escort and GetGameTimer() - closedAt >= Config.Closing.graceSeconds * 1000 then
-                escortOut(inside)
-                closedAt = nil
+                if escortOut(inside) then closedAt = nil end -- no exit set: keep the timer, don't re-warn
             end
         else
             closedAt = nil
@@ -204,14 +188,14 @@ CreateThread(function()
         local doorsShouldOpen = open or inside ~= nil
         setDoors(doorsShouldOpen)
         tick = tick + 1
-        if tick >= 6 then           -- periodically re-apply in case another script or streaming reset them
+        if tick >= 6 then -- periodically re-apply in case another script or streaming reset them
             tick = 0
             registerDoors()
             setDoors(doorsShouldOpen, true)
         end
         for id in pairs(blips) do setBlipStatus(id, open) end
 
-        -- check more often while someone is inside a closed bank so doors lock soon after they leave
+        -- check more often while inside so doors lock soon after the player leaves
         Wait(inside and 2000 or (Config.Blip.updateInterval or 10000))
     end
 end)
@@ -219,9 +203,7 @@ end)
 CreateThread(function()
     for id, bank in pairs(Config.Banks) do
         exports['rsg-core']:createPrompt('rsg_bank_' .. id, bank.coords, RSGCore.Shared.Keybinds[Config.OpenKey],
-            locale('cl_open_bank', bank.label), {
-                type = 'client', event = 'rsg-banking:client:open', args = { id },
-            })
+            locale('cl_open_bank', bank.label), { type = 'client', event = 'rsg-banking:client:open', args = { id } })
         if Config.Blip.enabled then
             local blip = BlipAddForCoords(1664425300, bank.coords.x, bank.coords.y, bank.coords.z)
             SetBlipSprite(blip, Config.Blip.sprite, true)

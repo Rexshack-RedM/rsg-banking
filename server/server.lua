@@ -120,7 +120,8 @@ end
 
 -- Player lookup, DB ready, distance, rate limit and per-player lock around every action
 local function guarded(src, bankId, fn)
-    if not BankingDBReady or busy[src] or rateLimited(src) then return nil end
+    if not BankingDBReady or busy[src] then return nil end
+    if rateLimited(src) then notify(src, 'sv_slow_down', 'warning'); return nil end
     if not nearBank(src, bankId) then
         notify(src, 'sv_too_far', 'error')
         BankLogSuspicious(src, 'Transaction attempted away from the bank', bankId)
@@ -204,11 +205,13 @@ register('rsg-banking:server:deposit', function(src, bankId, amount)
         logTx(cid, bankId, 'deposit', amount, nil)
         notify(src, 'sv_deposited', 'success', m(amount))
         local label = Config.Banks[bankId].label
-        BankLog('deposit', src, {
-            { name = 'Branch', value = label, inline = true },
-            { name = 'Amount', value = BankMoney(amount), inline = true },
-            { name = 'New Balance', value = BankMoney(getBalance(cid, bankId)), inline = true },
-        })
+        if BankLogActive('deposit') then
+            BankLog('deposit', src, {
+                { name = 'Branch', value = label, inline = true },
+                { name = 'Amount', value = BankMoney(amount), inline = true },
+                { name = 'New Balance', value = BankMoney(getBalance(cid, bankId)), inline = true },
+            })
+        end
         BankLogLarge('Deposit', src, label, amount)
     end)
 end)
@@ -221,11 +224,13 @@ register('rsg-banking:server:withdraw', function(src, bankId, amount)
         logTx(cid, bankId, 'withdraw', amount, nil)
         notify(src, 'sv_withdrew', 'success', m(amount))
         local label = Config.Banks[bankId].label
-        BankLog('withdraw', src, {
-            { name = 'Branch', value = label, inline = true },
-            { name = 'Amount', value = BankMoney(amount), inline = true },
-            { name = 'New Balance', value = BankMoney(getBalance(cid, bankId)), inline = true },
-        })
+        if BankLogActive('withdraw') then
+            BankLog('withdraw', src, {
+                { name = 'Branch', value = label, inline = true },
+                { name = 'Amount', value = BankMoney(amount), inline = true },
+                { name = 'New Balance', value = BankMoney(getBalance(cid, bankId)), inline = true },
+            })
+        end
         BankLogLarge('Withdrawal', src, label, amount)
     end)
 end)
@@ -248,11 +253,10 @@ register('rsg-banking:server:transfer', function(src, bankId, targetId, amount)
             return notify(src, 'sv_no_account_target', 'error', Config.Banks[targetId].label)
         end
 
-        local toLabel = Config.Banks[targetId].label
+        local fromLabel, toLabel = Config.Banks[bankId].label, Config.Banks[targetId].label
         logTx(cid, bankId, 'wire_out', total, locale('tx_wire_to', toLabel, m(fee)))
-        logTx(cid, targetId, 'wire_in', amount, locale('tx_wire_from', Config.Banks[bankId].label))
+        logTx(cid, targetId, 'wire_in', amount, locale('tx_wire_from', fromLabel))
         notify(src, 'sv_transferred', 'success', m(amount), toLabel, m(fee))
-        local fromLabel = Config.Banks[bankId].label
         BankLog('transfer', src, {
             { name = 'From', value = fromLabel, inline = true },
             { name = 'To', value = toLabel, inline = true },
@@ -279,7 +283,9 @@ end)
 ---------------------------------------------------------------------
 -- exports for other resources (server-side only)
 ---------------------------------------------------------------------
-exports('HasAccount', hasAccount)
+exports('HasAccount', function(citizenid, bankId)
+    return Config.Banks[bankId] ~= nil and hasAccount(citizenid, bankId)
+end)
 
 exports('GetBranchBalance', function(citizenid, bankId)
     return getBalance(citizenid, bankId) or 0

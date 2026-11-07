@@ -61,6 +61,9 @@ local function pump()
     end, 'POST', job.payload, { ['Content-Type'] = 'application/json' })
 end
 
+-- true if this event will actually be sent (lets callers skip extra queries)
+function BankLogActive(event) return urlFor(event) ~= nil end
+
 function BankLog(event, src, fields, extra)
     local url = urlFor(event)
     if not url then return end
@@ -78,7 +81,7 @@ function BankLog(event, src, fields, extra)
         username   = W.botName,
         avatar_url = W.avatar ~= '' and W.avatar or nil,
         content    = extra.content,
-        allowed_mentions = { parse = { 'roles', 'users' } },
+        allowed_mentions = { parse = { 'roles' } }, -- never ping the player whose <@id> is in the identifiers field
         embeds = { {
             title       = e.title,
             description = extra.description,

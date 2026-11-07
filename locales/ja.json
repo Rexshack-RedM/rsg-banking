@@ -126,5 +126,6 @@
     "ui_paid_from_vault": "Paid from this branch vault",
     "ui_paid_cash": "Paid in cash",
     "ui_loan_limit_at": "You have an active loan at %s. Repay it before borrowing again.",
-    "ui_max": "Max"
+    "ui_max": "Max",
+    "sv_slow_down": "お待ちください、係員がまだ数えています。"
 }

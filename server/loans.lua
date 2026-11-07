@@ -49,12 +49,12 @@ function BuildLoanData(cid, bankId, owned)
     return {
         min = LC.minAmount, max = LC.maxAmount, interest = LC.interestPercent, termDays = LC.termDays,
         minHours = LC.minAccountHours, blocked = blocked, elsewhere = elsewhere, now = os.time(),
-        active = loan and { owed = loan.owed, principal = loan.principal, due = loan.due, late = loan.late } or nil,
+        active = loan,
     }
 end
 
 Bank.register('rsg-banking:server:takeLoan', function(src, bankId, amount)
-    return Bank.guarded(src, bankId, function(Player, cid)
+    return Bank.guarded(src, bankId, function(_, cid)
         if not LC.enabled then return end
         if not Bank.hasAccount(cid, bankId) then return Bank.notify(src, 'sv_no_account', 'error') end
         if getLoan(cid, bankId) then return Bank.notify(src, 'sv_loan_exists', 'error') end
@@ -93,6 +93,7 @@ end)
 Bank.register('rsg-banking:server:repayLoan', function(src, bankId, amount, method)
     return Bank.guarded(src, bankId, function(Player, cid)
         if not LC.enabled then return end
+        if method ~= 'cash' and method ~= 'bank' then return end
         local loan = getLoan(cid, bankId)
         if not loan then return Bank.notify(src, 'sv_no_loan', 'error') end
         amount = Bank.validAmount(src, amount); if not amount then return end

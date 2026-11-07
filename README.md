@@ -123,5 +123,17 @@ Included: `en`, `de`, `el`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`.
 Set the language in server.cfg with rsg-core's convar, e.g. `setr rsg:locale "de"` (falls back to `ox:locale`, then `en`).
 Discord webhook logs and console messages stay in English for staff.
 
+## Changelog
+### 3.0.5
+- Fix: Discord logs no longer ping the player on every transaction (only `largeMention` roles can be pinged)
+- Fix: loan repayment only accepts `bank` or `cash` as the payment method
+- Fix: `HasAccount` export returns false for unknown branch ids
+- UX: clicking too fast now shows a "slow down" notice instead of silently doing nothing
+- UX: amount fields clear after a successful deposit, withdrawal, wire or loan action
+- Perf: deposit/withdraw skip the extra balance query when their webhook is disabled
+- Cleanup: removed unused parameters and duplicated values
+
+See `DOCS.md` for the technical reference.
+
 ## Support
 Support: https://buymeacoffee.com/rexshack

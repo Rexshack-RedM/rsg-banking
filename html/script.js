@@ -205,7 +205,13 @@ function close() { closeDds(); $('app').classList.add('hidden'); post('close'); 
 window.addEventListener('message', e => {
   const m = e.data;
   if (m.action === 'open') { if (m.locales) { L = m.locales; applyI18n(); } render(m.data); setTab('vault'); $('amount').value = ''; $('wireAmount').value = ''; $('loanAmount').value = ''; $('loanPayAmount').value = ''; $('boxQty').value = ''; $('app').classList.remove('hidden'); window.restorePanelPos && window.restorePanelPos(); }
-  else if (m.action === 'update') render(m.data);
+  else if (m.action === 'update') {
+    // money moved -> the action went through, so clear the amount fields
+    const moved = state && (state.balance !== m.data.balance || state.cash !== m.data.cash);
+    render(m.data);
+    if (moved) ['amount', 'wireAmount', 'loanAmount', 'loanPayAmount', 'boxQty'].forEach(id => $(id).value = '');
+    calcFee(); loanRepayInfo();
+  }
   else if (m.action === 'close') { closeDds(); $('app').classList.add('hidden'); }
 });
 

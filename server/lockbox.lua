@@ -193,7 +193,7 @@ Bank.register('rsg-banking:server:lockboxDeposit', function(src, bankId, item, q
 end)
 
 Bank.register('rsg-banking:server:lockboxWithdraw', function(src, bankId, item, qty)
-    return Bank.guarded(src, bankId, function(Player, cid)
+    return Bank.guarded(src, bankId, function(_, cid)
         if not XC.enabled or type(item) ~= 'string' or not RSGCore.Shared.Items[item] then return end
         qty = validQty(src, qty); if not qty then return end
         if not getBox(cid, bankId) then return Bank.notify(src, 'sv_no_lockbox', 'error') end

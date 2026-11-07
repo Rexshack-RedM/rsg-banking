@@ -4,6 +4,12 @@ Config.AutoDatabase     = true         -- create tables automatically on start (
 Config.OpenKey          = 'J'          -- RSGCore.Shared.Keybinds key
 Config.ServerMaxDistance = 5.0        -- max distance from the bank for any transaction (server checked)
 Config.Cooldown         = 500          -- ms between bank requests per player (anti-spam)
+
+-- While NUI is open, block game controls but allow push-to-talk.
+Config.AllowPushToTalkWhileOpen = true
+Config.PushToTalkControls = {
+    0x4BC9DABB, -- INPUT_PUSH_TO_TALK
+}
 Config.MaxTransaction   = 100000       -- per single deposit/withdraw/transfer
 Config.HistoryLimit     = 15           -- transactions shown in the ledger
 Config.HistoryDays      = 30           -- delete ledger entries older than this on start (0 = keep forever)

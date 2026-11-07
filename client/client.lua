@@ -5,6 +5,34 @@ local blipState = {}   -- [bankId] = true (open) / false (closed)
 local currentBank = nil
 local opening = false
 
+local function applyNuiFocus(enable)
+    if enable then
+        SetNuiFocus(true, true)
+        if Config.AllowPushToTalkWhileOpen then
+            SetNuiFocusKeepInput(true)
+        end
+    else
+        SetNuiFocusKeepInput(false)
+        SetNuiFocus(false, false)
+    end
+end
+
+local function runPttWhitelist()
+    if not Config.AllowPushToTalkWhileOpen then return end
+    DisableAllControlActions(0)
+    DisableAllControlActions(1)
+    DisableAllControlActions(2)
+    local list = Config.PushToTalkControls
+    if list then
+        for i = 1, #list do
+            local c = list[i]
+            EnableControlAction(0, c, true)
+            EnableControlAction(1, c, true)
+            EnableControlAction(2, c, true)
+        end
+    end
+end
+
 local function notify(key, ntype, duration, ...)
     RSGCore.Functions.Notify({ title = locale('cl_title'), description = locale(key, ...), type = ntype, duration = duration or 5000 })
 end
@@ -20,7 +48,7 @@ end
 
 local function closeUI()
     currentBank = nil
-    SetNuiFocus(false, false)
+    applyNuiFocus(false)
     SendNUIMessage({ action = 'close' })
 end
 
@@ -46,7 +74,7 @@ RegisterNetEvent('rsg-banking:client:open', function(bankId)
     opening = false
     if not data then return end
     currentBank = bankId
-    SetNuiFocus(true, true)
+    applyNuiFocus(true)
     SendNUIMessage({ action = 'open', data = data, locales = getUILocales() })
 end)
 
@@ -215,9 +243,20 @@ CreateThread(function()
     end
 end)
 
+CreateThread(function()
+    while true do
+        if currentBank and Config.AllowPushToTalkWhileOpen then
+            Wait(0)
+            runPttWhitelist()
+        else
+            Wait(250)
+        end
+    end
+end)
+
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
     for _, b in pairs(blips) do RemoveBlip(b) end
     for id in pairs(Config.Banks) do exports['rsg-core']:deletePrompt('rsg_bank_' .. id) end
-    SetNuiFocus(false, false)
+    applyNuiFocus(false)
 end)

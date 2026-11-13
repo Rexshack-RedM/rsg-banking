@@ -136,4 +136,4 @@ Discord webhook logs and console messages stay in English for staff.
 See `DOCS.md` for the technical reference.
 
 ## Support
-Support: https://buymeacoffee.com/rexshack
+Support the Project : https://rexshack.tebex.store/

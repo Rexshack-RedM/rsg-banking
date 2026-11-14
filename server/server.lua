@@ -59,6 +59,22 @@ end
 
 local function hasAccount(cid, bankId) return getBalance(cid, bankId) ~= nil end
 
+---Character name for any citizenid (online or offline). Returns nil if no such citizen.
+function CitizenName(cid)
+    if type(cid) ~= 'string' or #cid == 0 or #cid > 50 then return nil end
+    local ci
+    local P = RSGCore.Functions.GetPlayerByCitizenId(cid)
+    if P then
+        ci = P.PlayerData.charinfo
+    else
+        local raw = MySQL.scalar.await('SELECT charinfo FROM players WHERE citizenid = ?', { cid })
+        if not raw then return nil end
+        ci = type(raw) == 'string' and json.decode(raw) or raw
+    end
+    ci = ci or {}
+    return (('%s %s'):format(ci.firstname or '', ci.lastname or ''):match('^%s*(.-)%s*$'))
+end
+
 -- Atomic balance changes. Return true only if a row was actually changed.
 local function credit(cid, bankId, amount)
     local n = MySQL.update.await('UPDATE rsg_bank_accounts SET balance = balance + ? WHERE citizenid = ? AND bank = ?', { amount, cid, bankId })
@@ -71,6 +87,7 @@ local function debit(cid, bankId, amount)
 end
 
 local function logTx(cid, bankId, txType, amount, note)
+    if note ~= nil then note = tostring(note):sub(1, 255) end -- ledger column is VARCHAR(255)
     MySQL.insert('INSERT INTO rsg_bank_transactions (citizenid, bank, type, amount, note) VALUES (?, ?, ?, ?, ?)',
         { cid, bankId, txType, amount, note })
 end
@@ -115,6 +132,10 @@ local function buildData(src, bankId)
         history    = history,
         loan       = BuildLoanData(cid, bankId, owned),
         lockbox    = BuildLockboxData(Player, bankId),
+        send       = BuildSendData(cid),
+        business   = BuildBusinessData(Player, bankId),
+        interest   = BuildInterestData(),
+        statement  = TelegramAvailable(),
     }
 end
 
@@ -131,6 +152,7 @@ local function guarded(src, bankId, fn)
         notify(src, 'cl_bank_closed', 'error', Config.OpenHour, Config.CloseHour)
         return nil
     end
+    if IsBranchLocked(bankId) then notify(src, 'sv_branch_locked', 'error'); return nil end
     local Player = RSGCore.Functions.GetPlayer(src)
     if not Player then return nil end
 
@@ -154,6 +176,7 @@ end
 Bank = {
     round = round, money = m, notify = notify, guarded = guarded, validAmount = validAmount, register = register,
     getBalance = getBalance, hasAccount = hasAccount, credit = credit, debit = debit, logTx = logTx,
+    nearBank = nearBank, rateLimited = rateLimited,
 }
 
 ---------------------------------------------------------------------
@@ -163,6 +186,7 @@ register('rsg-banking:server:getData', function(src, bankId)
     if not BankingDBReady or rateLimited(src) then return nil end
     if not nearBank(src, bankId) then BankLogBlocked(src, 'Menu request away from the bank', tostring(bankId)); return nil end
     if not bankOpen() then notify(src, 'cl_bank_closed', 'error', Config.OpenHour, Config.CloseHour); return nil end
+    if IsBranchLocked(bankId) then notify(src, 'sv_branch_locked', 'error'); return nil end
     return buildData(src, bankId)
 end)
 
@@ -220,7 +244,10 @@ register('rsg-banking:server:withdraw', function(src, bankId, amount)
     return guarded(src, bankId, function(Player, cid)
         amount = validAmount(src, amount); if not amount then return end
         if not debit(cid, bankId, amount) then return notify(src, 'sv_not_enough_balance', 'error') end
-        Player.Functions.AddMoney('cash', amount, 'bank-withdraw-' .. bankId)
+        if not Player.Functions.AddMoney('cash', amount, 'bank-withdraw-' .. bankId) then
+            credit(cid, bankId, amount) -- cash could not be paid out: put the money back
+            return notify(src, 'sv_invalid_amount', 'error')
+        end
         logTx(cid, bankId, 'withdraw', amount, nil)
         notify(src, 'sv_withdrew', 'success', m(amount))
         local label = Config.Banks[bankId].label
@@ -296,6 +323,7 @@ exports('GetTotalBalance', function(citizenid)
 end)
 
 exports('AddBranchMoney', function(citizenid, bankId, amount, note)
+    if type(citizenid) ~= 'string' or type(bankId) ~= 'string' then return false end
     amount = round(tonumber(amount) or 0)
     if amount <= 0 or not Config.Banks[bankId] or not credit(citizenid, bankId, amount) then return false end
     logTx(citizenid, bankId, 'deposit', amount, note)
@@ -311,6 +339,7 @@ exports('AddBranchMoney', function(citizenid, bankId, amount, note)
 end)
 
 exports('RemoveBranchMoney', function(citizenid, bankId, amount, note)
+    if type(citizenid) ~= 'string' or type(bankId) ~= 'string' then return false end
     amount = round(tonumber(amount) or 0)
     if amount <= 0 or not Config.Banks[bankId] or not debit(citizenid, bankId, amount) then return false end
     logTx(citizenid, bankId, 'withdraw', amount, note)

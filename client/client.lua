@@ -4,6 +4,7 @@ local blips = {}       -- [bankId] = blip
 local blipState = {}   -- [bankId] = true (open) / false (closed)
 local currentBank = nil
 local opening = false
+local branchLocked = {}   -- [bankId] = true while another resource (e.g. a robbery) has the branch locked down
 
 local function applyNuiFocus(enable)
     if enable then
@@ -66,6 +67,7 @@ end
 
 RegisterNetEvent('rsg-banking:client:open', function(bankId)
     if currentBank or opening or not Config.Banks[bankId] then return end
+    if branchLocked[bankId] then return notify('sv_branch_locked', 'error', 5000) end
     if not isOpen() then
         return notify('cl_bank_closed', 'error', 5000, Config.OpenHour, Config.CloseHour)
     end
@@ -105,6 +107,39 @@ nuiAction('buyLockbox',      'rsg-banking:server:buyLockbox',      'size')
 nuiAction('upgradeLockbox',  'rsg-banking:server:upgradeLockbox')
 nuiAction('lockboxDeposit',  'rsg-banking:server:lockboxDeposit',  'item', 'qty')
 nuiAction('lockboxWithdraw', 'rsg-banking:server:lockboxWithdraw', 'item', 'qty')
+nuiAction('payRent',         'rsg-banking:server:payRent')
+nuiAction('sendMoney',       'rsg-banking:server:sendMoney',       'citizen', 'amount')
+nuiAction('sendStatement',   'rsg-banking:server:sendStatement')
+nuiAction('bizOpen',         'rsg-banking:server:bizOpen',         'org')
+nuiAction('bizDeposit',      'rsg-banking:server:bizDeposit',      'org', 'amount')
+nuiAction('bizWithdraw',     'rsg-banking:server:bizWithdraw',     'org', 'amount')
+nuiAction('bizAddMember',    'rsg-banking:server:bizAddMember',    'org', 'citizen')
+nuiAction('bizRemoveMember', 'rsg-banking:server:bizRemoveMember', 'org', 'citizen')
+
+-- shows the recipient's name while typing a citizen id (answer goes straight back to the NUI)
+RegisterNUICallback('lookupRecipient', function(d, cb)
+    local name
+    if currentBank and type(d.citizen) == 'string' then
+        name = RSGCore.Functions.AwaitCallback('rsg-banking:server:lookupRecipient', 5000, currentBank, d.citizen)
+    end
+    cb({ name = name })
+end)
+
+-- branch lockdown (set by other resources through the server exports)
+RegisterNetEvent('rsg-banking:client:branchLock', function(bankId, locked)
+    if type(bankId) ~= 'string' then return end
+    branchLocked[bankId] = locked and true or nil
+    if locked and currentBank == bankId then
+        closeUI()
+        notify('sv_branch_locked', 'error', 5000)
+    end
+end)
+
+CreateThread(function()
+    Wait(3000)
+    local list = RSGCore.Functions.AwaitCallback('rsg-banking:server:getLocks', 10000)
+    for _, id in ipairs(list or {}) do branchLocked[id] = true end
+end)
 
 -- close the menu if the player walks away or the bank closes
 CreateThread(function()
@@ -112,7 +147,8 @@ CreateThread(function()
         if currentBank then
             Wait(1000)
             local bank = currentBank and Config.Banks[currentBank] -- may have closed during the wait
-            if bank and (#(GetEntityCoords(PlayerPedId()) - bank.coords) > Config.ServerMaxDistance or not isOpen()) then
+            local ped = PlayerPedId()
+            if bank and (#(GetEntityCoords(ped) - bank.coords) > Config.ServerMaxDistance or not isOpen() or IsEntityDead(ped)) then
                 closeUI()
             end
         else
@@ -171,7 +207,8 @@ local function escortOut(id)
     if not exit then return false end
     local ped = PlayerPedId()
     DoScreenFadeOut(800)
-    while not IsScreenFadedOut() do Wait(50) end
+    local t = GetGameTimer()
+    while not IsScreenFadedOut() and GetGameTimer() - t < 3000 do Wait(50) end -- never hang on a stuck fade
     SetEntityCoords(ped, exit.x, exit.y, exit.z, false, false, false, false)
     SetEntityHeading(ped, exit.w or 0.0)
     Wait(500)
@@ -221,7 +258,7 @@ CreateThread(function()
             registerDoors()
             setDoors(doorsShouldOpen, true)
         end
-        for id in pairs(blips) do setBlipStatus(id, open) end
+        for id in pairs(blips) do setBlipStatus(id, open and not branchLocked[id]) end
 
         -- check more often while inside so doors lock soon after the player leaves
         Wait(inside and 2000 or (Config.Blip.updateInterval or 10000))
@@ -252,6 +289,11 @@ CreateThread(function()
             Wait(250)
         end
     end
+end)
+
+-- close the menu if the character logs out / switches
+RegisterNetEvent('RSGCore:Client:OnPlayerUnload', function()
+    if currentBank then closeUI() end
 end)
 
 AddEventHandler('onResourceStop', function(res)

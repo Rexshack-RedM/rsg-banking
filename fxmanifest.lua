@@ -4,7 +4,7 @@ game 'rdr3'
 lua54 'yes'
 
 description 'rsg-banking - individual branch banks across the frontier'
-version '3.0.5'
+version '3.1.0'
 
 shared_scripts {
     '@rsg-core/shared/locale.lua',
@@ -17,9 +17,14 @@ server_scripts {
     'server/webhooks.lua',
     'server/database.lua',
     'server/server.lua',
+    'server/lock.lua',
     'server/loans.lua',
     'server/lockbox.lua',
     'server/homebank.lua',
+    'server/sendmoney.lua',
+    'server/interest.lua',
+    'server/business.lua',
+    'server/telegram.lua',
     'server/versionchecker.lua',
 }
 

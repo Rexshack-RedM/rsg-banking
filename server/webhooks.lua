@@ -101,6 +101,7 @@ BankMoney = money
 
 -- Sends the large-transaction alert when the amount is over the threshold
 function BankLogLarge(kind, src, bankLabel, amount, fields)
+    if TelegramLarge then pcall(TelegramLarge, kind, src, bankLabel, amount) end -- receipt telegram (own threshold)
     if (tonumber(amount) or 0) < (W.largeAmount or math.huge) then return end
     local f = { { name = 'Type', value = kind, inline = true }, { name = 'Branch', value = bankLabel, inline = true },
                 { name = 'Amount', value = money(amount), inline = true } }

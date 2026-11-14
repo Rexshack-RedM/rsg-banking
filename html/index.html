@@ -47,6 +47,7 @@
       <div class="tab" data-tab="branches" data-i18n="ui_tab_branches">Branches</div>
       <div class="tab" data-tab="loans" id="loansTabBtn" data-i18n="ui_tab_loans">Loans</div>
       <div class="tab" data-tab="lockbox" id="lockboxTabBtn" data-i18n="ui_tab_lockbox">Lockbox</div>
+      <div class="tab" data-tab="business" id="bizTabBtn" data-i18n="ui_tab_business">Business</div>
       <div class="tab" data-tab="ledger" data-i18n="ui_tab_ledger">Ledger</div>
     </div>
 
@@ -61,9 +62,23 @@
         <button class="wood-btn" id="depositBtn" data-i18n="ui_deposit">Deposit</button>
         <button class="wood-btn" id="withdrawBtn" data-i18n="ui_withdraw">Withdraw</button>
       </div>
+      <div class="fee center hidden" id="interestInfo"></div>
     </div>
 
     <div class="section hidden" id="tab-wire">
+      <div class="quick hidden" id="wireModes">
+        <div class="chip active" data-mode="own" data-i18n="ui_wire_mode_own">My Branches</div>
+        <div class="chip" data-mode="citizen" data-i18n="ui_wire_mode_citizen">To Citizen</div>
+      </div>
+      <div class="section hidden" id="wireCitizen">
+        <div class="desc" data-i18n="ui_send_desc">Send money to another citizen. It arrives in their home branch.</div>
+        <input type="text" id="sendCid" class="input" data-i18n-ph="ui_send_citizen_id" placeholder="Citizen ID" maxlength="50" autocomplete="off" spellcheck="false">
+        <div class="fee" id="sendWho"></div>
+        <input type="number" id="sendAmount" class="input" data-i18n-ph="ui_amount" placeholder="Amount ($)" min="0" step="0.01">
+        <div class="fee" id="sendFeeInfo"></div>
+        <div class="actions"><button class="wood-btn" id="sendBtn" data-i18n="ui_send_btn">Send Money</button></div>
+      </div>
+      <div class="section" id="wireOwn">
       <div class="wire-empty hidden" id="wireEmpty">
         <div class="badge big">&#8617;</div>
         <div class="open-title" data-i18n="ui_no_other_title">No Other Accounts</div>
@@ -76,12 +91,17 @@
         <div class="fee" id="feeInfo">Fee: $0.00 &middot; Total: $0.00</div>
         <div class="actions"><button class="wood-btn" id="wireBtn" data-i18n="ui_send_wire">Send Wire</button></div>
       </div>
+      </div>
     </div>
 
     <div class="section hidden" id="tab-branches"><div class="list" id="branchList"></div></div>
-    <div class="section hidden" id="tab-ledger"><div class="list" id="ledgerList"></div></div>
+    <div class="section hidden" id="tab-ledger">
+      <div class="list" id="ledgerList"></div>
+      <div class="actions hidden" id="statementRow"><button class="wood-btn" id="statementBtn" data-i18n="ui_statement_btn">Send Statement by Telegram</button></div>
+    </div>
 
     <div class="section hidden" id="tab-loans">
+      <div class="fee center hidden" id="creditLine"></div>
       <div class="section hidden" id="loanNew">
         <div class="desc" data-i18n="ui_loan_desc">Borrow from this branch. The money is paid into your vault here.</div>
         <div class="fee" id="loanTerms"></div>
@@ -127,12 +147,21 @@
           <button class="wood-btn small-btn" id="boxUpgradeBtn"></button>
         </div>
         <div class="meter"><div class="meter-fill" id="boxMeter"></div></div>
+        <div class="box-head hidden" id="boxRentRow">
+          <div class="fee" id="boxRent"></div>
+          <button class="wood-btn small-btn" id="boxRentBtn"></button>
+        </div>
         <input type="number" id="boxQty" class="input" data-i18n-ph="ui_qty" placeholder="Qty (blank = all)" min="1" step="1">
         <div class="list-title" data-i18n="ui_in_lockbox">In Lockbox</div>
         <div class="list short" id="boxStored"></div>
         <div class="list-title" data-i18n="ui_on_you">On You</div>
         <div class="list short" id="boxCarry"></div>
       </div>
+    </div>
+
+    <div class="section hidden" id="tab-business">
+      <div class="desc" data-i18n="ui_biz_desc">Shared accounts for your job or gang. The boss decides who may withdraw.</div>
+      <div class="list tall" id="bizList"></div>
     </div>
     </div>
   </div>

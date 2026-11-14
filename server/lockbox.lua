@@ -3,15 +3,38 @@
 -----------------------------------------------------------------------
 local RSGCore = exports['rsg-core']:GetCoreObject()
 local XC = Config.Lockbox or {}
-local SIZE_ORDER = { 'small', 'medium', 'large' }
+
+-- every size in Config.Lockbox.sizes, smallest first (so custom sizes show up too)
+local SIZE_ORDER = {}
+for id in pairs(XC.sizes or {}) do SIZE_ORDER[#SIZE_ORDER + 1] = id end
+table.sort(SIZE_ORDER, function(a, b)
+    local sa, sb = XC.sizes[a], XC.sizes[b]
+    if sa.capacity ~= sb.capacity then return sa.capacity < sb.capacity end
+    return a < b
+end)
 
 local function itemInfo(name)
     local it = RSGCore.Shared.Items[name] or {}
     return it.label or name, it.image or (name .. '.png')
 end
 
+local RC = XC.rent or {}
+local function periodDays() return math.max(1, tonumber(RC.periodDays) or 7) end
+
+-- rent_until / now are UNIX seconds read from the database clock (so they always compare correctly)
 local function getBox(cid, bankId)
-    return MySQL.single.await('SELECT size, upgrades FROM rsg_bank_lockboxes WHERE citizenid = ? AND bank = ?', { cid, bankId })
+    return MySQL.single.await(
+        'SELECT size, upgrades, UNIX_TIMESTAMP(rent_until) AS rent_until, UNIX_TIMESTAMP(NOW()) AS now FROM rsg_bank_lockboxes WHERE citizenid = ? AND bank = ?',
+        { cid, bankId })
+end
+
+local function rentPrice(box)
+    local s = XC.sizes[box.size]
+    return s and tonumber(s.rent) or 0
+end
+
+local function rentOverdue(box)
+    return RC.enabled and box.rent_until ~= nil and tonumber(box.rent_until) < tonumber(box.now)
 end
 
 local function capacityOf(box)
@@ -67,10 +90,10 @@ function BuildLockboxData(Player, bankId)
     local sizes = {}
     for _, id in ipairs(SIZE_ORDER) do
         local s = XC.sizes[id]
-        if s then sizes[#sizes + 1] = { id = id, label = s.label, capacity = s.capacity, price = s.price } end
+        if s then sizes[#sizes + 1] = { id = id, label = s.label, capacity = s.capacity, price = s.price, rent = RC.enabled and (tonumber(s.rent) or 0) or 0 } end
     end
 
-    local data = { sizes = sizes, payWith = XC.payWith, imagePath = XC.imagePath }
+    local data = { sizes = sizes, payWith = XC.payWith, imagePath = XC.imagePath, rentDays = RC.enabled and periodDays() or 0 }
 
     local carry = {}
     for name in pairs(XC.items or {}) do
@@ -103,6 +126,14 @@ function BuildLockboxData(Player, bankId)
             upgrades = tonumber(box.upgrades) or 0, maxUpgrades = up.maxSteps or 0,
             canUpgrade = canUpgrade(box), upgradePrice = up.price or 0, upgradeStep = up.step or 0,
         }
+        if RC.enabled and box.rent_until then
+            local due = tonumber(box.rent_until)
+            data.box.rent = {
+                price = rentPrice(box), periodDays = periodDays(), due = due, now = tonumber(box.now),
+                overdue = rentOverdue(box) and true or false, graceDays = RC.graceDays or 0,
+                canPay = (due - tonumber(box.now)) < (RC.maxPrepayPeriods or 4) * periodDays() * 86400,
+            }
+        end
     end
     return data
 end
@@ -116,7 +147,9 @@ Bank.register('rsg-banking:server:buyLockbox', function(src, bankId, size)
         if getBox(cid, bankId) then return Bank.notify(src, 'sv_lockbox_exists', 'error') end
         if not charge(src, Player, cid, bankId, s.price, 'bank-lockbox-' .. bankId) then return end
 
-        local n = MySQL.update.await('INSERT IGNORE INTO rsg_bank_lockboxes (citizenid, bank, size) VALUES (?, ?, ?)', { cid, bankId, size })
+        local n = MySQL.update.await(
+            'INSERT IGNORE INTO rsg_bank_lockboxes (citizenid, bank, size, rent_until) VALUES (?, ?, ?, NOW() + INTERVAL ? DAY)',
+            { cid, bankId, size, periodDays() })
         if (n or 0) == 0 then
             refund(Player, cid, bankId, s.price)
             return Bank.notify(src, 'sv_lockbox_exists', 'error')
@@ -138,6 +171,7 @@ Bank.register('rsg-banking:server:upgradeLockbox', function(src, bankId)
         local box = getBox(cid, bankId)
         if not box then return Bank.notify(src, 'sv_no_lockbox', 'error') end
         if not canUpgrade(box) then return Bank.notify(src, 'sv_lockbox_max', 'error') end
+        if rentOverdue(box) then return Bank.notify(src, 'sv_rent_overdue_lock', 'error') end
         local up = XC.upgrade
         if not charge(src, Player, cid, bankId, up.price, 'bank-lockbox-upgrade-' .. bankId) then return end
         local n = MySQL.update.await(
@@ -174,14 +208,20 @@ Bank.register('rsg-banking:server:lockboxDeposit', function(src, bankId, item, q
         qty = validQty(src, qty); if not qty then return end
         local box = getBox(cid, bankId)
         if not box then return Bank.notify(src, 'sv_no_lockbox', 'error') end
+        if rentOverdue(box) then return Bank.notify(src, 'sv_rent_overdue_lock', 'error') end
         local free = capacityOf(box) - usedOf(getStored(cid, bankId))
         if qty > free then return Bank.notify(src, 'sv_lockbox_full', 'error', math.max(free, 0)) end
         if countItem(Player, item) < qty then return Bank.notify(src, 'sv_lockbox_not_enough', 'error') end
-        if not exports['rsg-inventory']:RemoveItem(src, item, qty, nil, 'bank-lockbox-store') then return Bank.notify(src, 'sv_lockbox_not_enough', 'error') end
 
+        -- record it in the lockbox first, then take the item: a failure can never destroy items
         MySQL.insert.await(
             'INSERT INTO rsg_bank_lockbox_items (citizenid, bank, item, amount) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE amount = amount + VALUES(amount)',
             { cid, bankId, item, qty })
+        if not exports['rsg-inventory']:RemoveItem(src, item, qty, nil, 'bank-lockbox-store') then
+            MySQL.update.await('UPDATE rsg_bank_lockbox_items SET amount = amount - ? WHERE citizenid = ? AND bank = ? AND item = ? AND amount >= ?',
+                { qty, cid, bankId, item, qty })
+            return Bank.notify(src, 'sv_lockbox_not_enough', 'error')
+        end
         local label = itemInfo(item)
         Bank.notify(src, 'sv_lockbox_stored', 'success', qty, label)
         BankLog('lockbox', src, {
@@ -219,6 +259,99 @@ Bank.register('rsg-banking:server:lockboxWithdraw', function(src, bankId, item, 
             { name = 'Item', value = ('%sx %s (%s)'):format(qty, label, item), inline = true },
         })
     end)
+end)
+
+---------------------------------------------------------------------
+-- rent
+---------------------------------------------------------------------
+local rentNotified = {} -- [cid:bank] = true once the "overdue" warning has been shown
+
+local function notifyCid(cid, key, ntype, ...)
+    local P = RSGCore.Functions.GetPlayerByCitizenId(cid)
+    if P then Bank.notify(P.PlayerData.source, key, ntype, ...) end
+end
+
+-- manual payment: covers one more rent period starting now (also clears any overdue state)
+Bank.register('rsg-banking:server:payRent', function(src, bankId)
+    return Bank.guarded(src, bankId, function(Player, cid)
+        if not XC.enabled or not RC.enabled then return end
+        local box = getBox(cid, bankId)
+        if not box then return Bank.notify(src, 'sv_no_lockbox', 'error') end
+        local ahead = (tonumber(box.rent_until) or tonumber(box.now)) - tonumber(box.now)
+        if ahead >= (RC.maxPrepayPeriods or 4) * periodDays() * 86400 then return Bank.notify(src, 'sv_rent_prepaid_max', 'error') end
+        local price = rentPrice(box)
+        if not charge(src, Player, cid, bankId, price, 'bank-lockbox-rent-' .. bankId) then return end
+        local n = MySQL.update.await(
+            'UPDATE rsg_bank_lockboxes SET rent_until = GREATEST(COALESCE(rent_until, NOW()), NOW()) + INTERVAL ? DAY WHERE citizenid = ? AND bank = ?',
+            { periodDays(), cid, bankId })
+        if (n or 0) == 0 then refund(Player, cid, bankId, price); return Bank.notify(src, 'sv_no_lockbox', 'error') end
+        rentNotified[cid .. ':' .. bankId] = nil
+        if price > 0 and XC.payWith ~= 'cash' then Bank.logTx(cid, bankId, 'lockbox_rent', price, locale('tx_lockbox_rent')) end
+        Bank.notify(src, 'sv_rent_paid', 'success', periodDays())
+        BankLog('lockbox', src, {
+            { name = 'Action', value = 'Rent paid', inline = true },
+            { name = 'Branch', value = Config.Banks[bankId].label, inline = true },
+            { name = 'Price', value = BankMoney(price), inline = true },
+        })
+    end)
+end)
+
+local function evict(cid, bankId, label)
+    local items = tonumber(MySQL.scalar.await(
+        'SELECT COALESCE(SUM(amount), 0) FROM rsg_bank_lockbox_items WHERE citizenid = ? AND bank = ?', { cid, bankId })) or 0
+    MySQL.update.await('DELETE FROM rsg_bank_lockbox_items WHERE citizenid = ? AND bank = ?', { cid, bankId })
+    MySQL.update.await('DELETE FROM rsg_bank_lockboxes WHERE citizenid = ? AND bank = ?', { cid, bankId })
+    rentNotified[cid .. ':' .. bankId] = nil
+    notifyCid(cid, 'sv_rent_evicted', 'error', label)
+    BankLog('lockbox', nil, {
+        { name = 'Action', value = 'Lockbox cleared for unpaid rent', inline = true },
+        { name = 'Citizen ID', value = cid, inline = true },
+        { name = 'Branch', value = label, inline = true },
+        { name = 'Items forfeited', value = tostring(items), inline = true },
+    })
+    TriggerEvent('rsg-banking:server:lockboxEvicted', cid, bankId, items) -- hook for other resources
+end
+
+local function processRent()
+    -- boxes from before rent existed start their first period now
+    MySQL.update.await('UPDATE rsg_bank_lockboxes SET rent_until = NOW() + INTERVAL ? DAY WHERE rent_until IS NULL', { periodDays() })
+    local rows = MySQL.query.await(
+        'SELECT citizenid, bank, size, UNIX_TIMESTAMP(rent_until) AS due, UNIX_TIMESTAMP(NOW()) AS now FROM rsg_bank_lockboxes WHERE rent_until < NOW()') or {}
+    for _, r in ipairs(rows) do
+        local cid, bankId = r.citizenid, r.bank
+        local label = Config.Banks[bankId] and Config.Banks[bankId].label or bankId
+        local key = cid .. ':' .. bankId
+        local price = rentPrice(r)
+        if price <= 0 then
+            MySQL.update.await('UPDATE rsg_bank_lockboxes SET rent_until = NOW() + INTERVAL ? DAY WHERE citizenid = ? AND bank = ?', { periodDays(), cid, bankId })
+        elseif Bank.debit(cid, bankId, price) then
+            MySQL.update.await('UPDATE rsg_bank_lockboxes SET rent_until = rent_until + INTERVAL ? DAY WHERE citizenid = ? AND bank = ?', { periodDays(), cid, bankId })
+            Bank.logTx(cid, bankId, 'lockbox_rent', price, locale('tx_lockbox_rent_auto'))
+            rentNotified[key] = nil
+            notifyCid(cid, 'sv_rent_auto', 'inform', Bank.money(price), label)
+            BankLog('lockbox', nil, {
+                { name = 'Action', value = 'Rent collected from vault', inline = true },
+                { name = 'Citizen ID', value = cid, inline = true },
+                { name = 'Branch', value = label, inline = true },
+                { name = 'Rent', value = BankMoney(price), inline = true },
+            })
+        elseif tonumber(r.now) > tonumber(r.due) + (RC.graceDays or 3) * 86400 then
+            evict(cid, bankId, label)
+        elseif not rentNotified[key] then
+            rentNotified[key] = true
+            notifyCid(cid, 'sv_rent_overdue', 'error', label, RC.graceDays or 3)
+        end
+    end
+end
+
+CreateThread(function()
+    if not XC.enabled or not RC.enabled then return end
+    while not BankingDBReady do Wait(1000) end
+    while true do
+        local ok, err = pcall(processRent)
+        if not ok then print(('[rsg-banking] ^1lockbox rent error:^7 %s'):format(err)) end
+        Wait(math.max(1, RC.checkInterval or 30) * 60000)
+    end
 end)
 
 ---------------------------------------------------------------------

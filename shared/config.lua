@@ -55,6 +55,79 @@ Config.Loans = {
     latePenaltyPercent = 10,     -- added once when the loan goes overdue
     autoCollect     = true,      -- overdue loans are collected from the player's branch balances automatically
     checkInterval   = 10,        -- minutes between overdue checks
+    -- A loan that stays unpaid this long after its due date is written off (a "default")
+    default = {
+        enabled      = true,
+        afterDays    = 3,        -- real days after the due date
+        seizeLockbox = true,     -- the lockbox contents at that branch are seized as collateral
+    },
+}
+
+-- Credit score: repaying loans builds it, going late or defaulting damages it.
+-- The highest tier a player's score reaches sets their loan terms. Below the lowest tier they can't borrow.
+Config.Credit = {
+    enabled    = true,
+    startScore = 600,
+    minScore   = 300,
+    maxScore   = 850,
+    repaidOnTime = 15,           -- loan fully repaid before it went overdue
+    wentLate     = -40,          -- loan became overdue
+    defaulted    = -100,         -- loan written off
+    tiers = {
+        { min = 700, interestAdjust = -2, maxMult = 1.5 },   -- interest +/- points on Config.Loans.interestPercent, x loan limit
+        { min = 550, interestAdjust = 0,  maxMult = 1.0 },
+        { min = 450, interestAdjust = 4,  maxMult = 0.5 },
+    },
+}
+
+-- Savings interest: paid on every personal branch balance once per interval (real hours).
+-- Only the first `maxBalance` of an account earns interest, and only accounts holding at least `minBalance`.
+-- Shared (business) accounts never earn interest. If the server was offline it pays once, never for missed periods.
+Config.Interest = {
+    enabled       = true,
+    percentPerDay = 0.2,         -- % of the (capped) balance per interval
+    minBalance    = 100,
+    maxBalance    = 10000,
+    intervalHours = 24,
+}
+
+-- Send money to another citizen: arrives in their home branch (works while they are offline)
+Config.Send = {
+    enabled      = true,
+    feePercent   = 2,
+    minFee       = 1,
+    maxAmount    = 5000,         -- per transfer
+    dailyLimit   = 10000,        -- total sent (incl. fees) per rolling 24h (0 = no limit)
+}
+
+-- Business accounts: one shared account per job / gang per branch. The boss opens it and decides who may withdraw.
+Config.Business = {
+    enabled       = true,
+    allowJobs     = true,
+    allowGangs    = true,
+    openFee       = 50,          -- cash
+    bossOnlyOpen  = true,
+    maxMembers    = 10,          -- extra people (besides the boss) allowed to withdraw
+    memberLimit   = 1000,        -- most a non-boss member can withdraw at once (0 = no limit)
+    excluded      = { unemployed = true, none = true },   -- job / gang names that can't have accounts
+}
+
+-- Telegrams (needs rsg-telegram). Receipts are written straight into its inbox.
+Config.Telegram = {
+    enabled          = true,
+    senderName       = 'Bank',
+    sendReceipts     = true,     -- recipient of "send money" gets a telegram
+    alertLarge       = true,     -- receipt for large deposits / withdrawals / wires / transfers
+    largeAmount      = 1000,
+    statementLines   = 12,       -- ledger lines in a statement telegram
+    statementCooldown = 60,      -- seconds between statements per player
+}
+
+-- Branch lockdown: other resources (e.g. rsg-bankrobbery) call exports['rsg-banking']:LockBranch(bankId, seconds)
+-- to shut a branch's services while it is being robbed. A lock always expires after `maxSeconds`.
+Config.Lock = {
+    enabled    = true,
+    maxSeconds = 1800,
 }
 
 -- Vault lockboxes: rent a safe-deposit box at a branch to store whitelisted items.
@@ -62,9 +135,18 @@ Config.Loans = {
 Config.Lockbox = {
     enabled = true,
     sizes = {
-        small  = { label = 'Small Lockbox',  capacity = 25,  price = 50  },
-        medium = { label = 'Medium Lockbox', capacity = 50,  price = 150 },
-        large  = { label = 'Large Lockbox',  capacity = 100, price = 300 },
+        small  = { label = 'Small Lockbox',  capacity = 25,  price = 50,  rent = 5  },   -- rent = $ per rent period
+        medium = { label = 'Medium Lockbox', capacity = 50,  price = 150, rent = 12 },
+        large  = { label = 'Large Lockbox',  capacity = 100, price = 300, rent = 25 },
+    },
+    -- Rent: taken from the branch vault each period (the price above covers the first period).
+    -- If the vault can't pay, the box is locked for deposits; after graceDays the contents are forfeited.
+    rent = {
+        enabled          = true,
+        periodDays       = 7,    -- real days per rent period
+        graceDays        = 3,    -- days after the due date before an unpaid box is cleared
+        maxPrepayPeriods = 4,    -- how far ahead a player may pay manually
+        checkInterval    = 30,   -- minutes between rent checks
     },
     -- Only the SMALL lockbox can be enlarged, one step at a time, for an extra fee
     upgrade = {

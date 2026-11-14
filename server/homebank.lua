@@ -37,12 +37,13 @@ local function creditOrOpen(cid, bankId, amount, txType, note)
 end
 
 ---Pay money into a player's home branch. Returns the branch id, or false if they have no home branch.
-function AddHomeMoney(cid, amount, note)
+function AddHomeMoney(cid, amount, note, txType)
     amount = round(tonumber(amount) or 0)
     if amount <= 0 then return false end
     local home = GetHomeBranch(cid)
     if not home then return false end
-    creditOrOpen(cid, home, amount, 'deposit', note)
+    if txType ~= 'send_in' then txType = 'deposit' end -- only the types this resource itself uses
+    creditOrOpen(cid, home, amount, txType, note and tostring(note):sub(1, 255) or nil)
     return home
 end
 
@@ -142,7 +143,11 @@ AddEventHandler('RSGCore:Server:OnMoneyChange', function(src, moneytype, amount,
     local cid = Player.PlayerData.citizenid
     if not GetHomeBranch(cid) then return end -- stays in core bank; swept once they pick a home branch
     if Player.Functions.RemoveMoney('bank', amount, 'forward-to-branch') then
-        AddHomeMoney(cid, amount, reason or 'Payment')
+        local ok, home = pcall(AddHomeMoney, cid, amount, reason or 'Payment')
+        if not ok or not home then -- never lose a paycheck: give it back to core bank money
+            Player.Functions.AddMoney('bank', amount, 'forward-to-branch-failed')
+            print(('[rsg-banking] ^1could not forward $%s to the home branch of %s^7'):format(amount, cid))
+        end
     end
 end)
 

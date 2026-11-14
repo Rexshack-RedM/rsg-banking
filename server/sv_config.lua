@@ -25,6 +25,9 @@ SVConfig.Webhooks = {
         system         = { enabled = true, url = '', color = 2303786,  title = 'System' },
         loan           = { enabled = true, url = '', color = 15844367, title = 'Loan' },
         lockbox        = { enabled = true, url = '', color = 12745742, title = 'Vault Lockbox' },
+        send           = { enabled = true, url = '', color = 3066993,  title = 'Money Sent' },
+        interest       = { enabled = true, url = '', color = 1752220,  title = 'Interest Paid' },
+        business       = { enabled = true, url = '', color = 16776960, title = 'Business Account' },
     },
 
     -- Large transaction alert (sent in addition to the normal log)

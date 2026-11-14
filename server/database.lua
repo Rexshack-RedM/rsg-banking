@@ -33,7 +33,8 @@ local tables = {
                 `note` VARCHAR(255) DEFAULT NULL,
                 `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
-                KEY `citizen_bank_idx` (`citizenid`, `bank`)
+                KEY `citizen_bank_idx` (`citizenid`, `bank`),
+                KEY `created_idx` (`created_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ]]
     },
@@ -82,8 +83,33 @@ local tables = {
                 `bank` VARCHAR(50) NOT NULL,
                 `size` VARCHAR(20) NOT NULL,
                 `upgrades` INT(11) NOT NULL DEFAULT 0,
+                `rent_until` TIMESTAMP NULL DEFAULT NULL,
                 `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (`citizenid`, `bank`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ]]
+    },
+    {
+        name = 'rsg_bank_credit',
+        sql = [[
+            CREATE TABLE IF NOT EXISTS `rsg_bank_credit` (
+                `citizenid` VARCHAR(50) NOT NULL,
+                `score` INT(11) NOT NULL,
+                `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`citizenid`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ]]
+    },
+    {
+        name = 'rsg_bank_business_members',
+        sql = [[
+            CREATE TABLE IF NOT EXISTS `rsg_bank_business_members` (
+                `org` VARCHAR(80) NOT NULL,
+                `citizenid` VARCHAR(50) NOT NULL,
+                `name` VARCHAR(100) DEFAULT NULL,
+                `added_by` VARCHAR(50) DEFAULT NULL,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`org`, `citizenid`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ]]
     },
@@ -118,11 +144,47 @@ local function pruneHistory()
     end)
 end
 
+-- add the created_at index to ledgers created by older versions (non-destructive)
+local function ensureLedgerIndex()
+    local has = MySQL.scalar.await(
+        "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'rsg_bank_transactions' AND index_name = 'created_idx'") or 0
+    if has == 0 then
+        MySQL.query.await('ALTER TABLE `rsg_bank_transactions` ADD INDEX `created_idx` (`created_at`)')
+        log('^2', 'Added ledger index created_idx')
+    end
+end
+
+-- add columns introduced after 3.0.5 to tables created by older versions (non-destructive)
+local function columnExists(tbl, col)
+    return (MySQL.scalar.await(
+        'SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', { tbl, col }) or 0) > 0
+end
+
+local function ensureColumns()
+    if not columnExists('rsg_bank_lockboxes', 'rent_until') then
+        MySQL.query.await('ALTER TABLE `rsg_bank_lockboxes` ADD COLUMN `rent_until` TIMESTAMP NULL DEFAULT NULL')
+        log('^2', 'Added column rsg_bank_lockboxes.rent_until')
+    end
+end
+
+-- keep pruning while the server stays up (every 6 hours)
+local function startPruneLoop()
+    CreateThread(function()
+        while true do
+            Wait(6 * 60 * 60 * 1000)
+            pruneHistory()
+        end
+    end)
+end
+
 MySQL.ready(function()
     if not Config.AutoDatabase then
         local missing = {}
         for _, t in ipairs(tables) do
             if not tableExists(t.name) then missing[#missing + 1] = t.name end
+        end
+        if #missing == 0 and tableExists('rsg_bank_lockboxes') and not columnExists('rsg_bank_lockboxes', 'rent_until') then
+            missing[#missing + 1] = 'rsg_bank_lockboxes.rent_until (import installation/update_3.1.0.sql)'
         end
         if #missing > 0 then
             BankLog('system', nil, { { name = 'Missing Tables', value = table.concat(missing, ', ') } }, { description = 'Database tables missing' })
@@ -131,6 +193,7 @@ MySQL.ready(function()
         end
         BankingDBReady = true
         pruneHistory()
+        startPruneLoop()
         return
     end
 
@@ -141,6 +204,8 @@ MySQL.ready(function()
                 log('^2', ('Created table %s'):format(t.name))
             end
         end
+        ensureLedgerIndex()
+        ensureColumns()
     end)
 
     if ok then
@@ -148,6 +213,7 @@ MySQL.ready(function()
         log('^2', 'Database ready')
         BankLog('system', nil, nil, { description = 'Resource started - database ready' })
         pruneHistory()
+        startPruneLoop()
     else
         log('^1', ('Automatic database setup failed: %s'):format(err))
         log('^1', 'Import installation/rsg_banking.sql manually.')

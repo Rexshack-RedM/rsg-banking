@@ -82,3 +82,115 @@ See the README "Server exports" section.
 ## Console
 - `bankinterestnow` – pays savings interest immediately (console only).
 - `bankwebhooktest` – sends a test embed for every webhook event (console only).
+
+<!-- BEGIN AUTO-REFERENCE (generated from the code; re-run the generator instead of editing by hand) -->
+
+## Technical reference
+
+Generated from the source of **rsg-banking 3.1.0**. Names, arguments and defaults below are read straight from the code.
+
+### Dependencies
+
+`rsg-core`, `rsg-inventory`, `oxmysql`
+
+### Database
+
+Tables: `rsg_bank_accounts`, `rsg_bank_transactions`, `rsg_bank_home`, `rsg_bank_meta`, `rsg_bank_loans`, `rsg_bank_lockboxes`, `rsg_bank_credit`, `rsg_bank_business_members`, `rsg_bank_lockbox_items`.
+
+Tables are created automatically on start while `Config.AutoDatabase = true` (default). Nothing is ever dropped or overwritten.
+For a manual install set `Config.AutoDatabase = false` and import `installation/rsg_banking.sql` / `installation/update_3.1.0.sql` once.
+
+```lua
+-- shared/config.lua
+Config.AutoDatabase = true -- false = import the SQL file yourself
+```
+
+### Configuration
+
+| Option | Default | Notes |
+|---|---|---|
+| `Config.AutoDatabase` | `true` | create tables automatically on start (false = import installation/rsg_banking.sql) |
+| `Config.OpenKey` | `'J'` | RSGCore.Shared.Keybinds key |
+| `Config.ServerMaxDistance` | `5.0` | max distance from the bank for any transaction (server checked) |
+| `Config.Cooldown` | `500` | ms between bank requests per player (anti-spam) |
+| `Config.AllowPushToTalkWhileOpen` | `true` | While NUI is open, block game controls but allow push-to-talk. |
+| `Config.PushToTalkControls` | `table` |  |
+| `Config.MaxTransaction` | `100000` | per single deposit/withdraw/transfer |
+| `Config.HistoryLimit` | `15` | transactions shown in the ledger |
+| `Config.HistoryDays` | `30` | delete ledger entries older than this on start (0 = keep forever) |
+| `Config.AccountOpenFee` | `5` | cash fee to open an account (0 = free) |
+| `Config.UseHours` | `true` | Opening hours (in-game clock). Set Config.UseHours = false for 24/7 banks |
+| `Config.OpenHour` | `7` |  |
+| `Config.CloseHour` | `21` |  |
+| `Config.Closing` | `table` | Closing time: stop players getting locked inside |
+| `Config.DefaultHomeBank` | `'valentine'` | used by the migration for players with no accounts yet |
+| `Config.ForwardCoreBank` | `true` | move money other scripts add to RSG-Core 'bank' into the home branch |
+| `Config.MigrateCoreMoney` | `true` | one-off: move old bank/valbank/rhobank/blkbank/armbank money into branches |
+| `Config.TransferFeePercent` | `5` | % fee charged on branch-to-branch wires |
+| `Config.TransferMinFee` | `1` | minimum fee in $ |
+| `Config.Loans` | `table` | and must be repaid (from the branch vault or cash) at the same branch. |
+| `Config.Credit` | `table` | The highest tier a player's score reaches sets their loan terms. Below the lowest tier they can't borrow. |
+| `Config.Interest` | `table` | Shared (business) accounts never earn interest. If the server was offline it pays once, never for missed perio |
+| `Config.Send` | `table` | Send money to another citizen: arrives in their home branch (works while they are offline) |
+| `Config.Business` | `table` | Business accounts: one shared account per job / gang per branch. The boss opens it and decides who may withdra |
+| `Config.Telegram` | `table` | Telegrams (needs rsg-telegram). Receipts are written straight into its inbox. |
+| `Config.Lock` | `table` | to shut a branch's services while it is being robbed. A lock always expires after `maxSeconds`. |
+| `Config.Lockbox` | `table` | Capacity is total item count (e.g. 25 = 25 gold bars). |
+| `Config.Blip` | `table` | Blip |
+| `Config.Banks` | `table` | Each bank is its own institution: money deposited here stays here. |
+| `Config.BankDoors` | `table` | state = 1 -> always locked (vaults, back rooms) |
+
+### Exports
+
+**Server**
+
+| Export | Arguments | File |
+|---|---|---|
+| `GetHomeBranch` | `` | `server/homebank.lua` |
+| `AddHomeMoney` | `` | `server/homebank.lua` |
+| `SweepCoreBank` | `` | `server/homebank.lua` |
+| `GetLoans` | `citizenid` | `server/loans.lua` |
+| `GetCreditScore` | `citizenid` | `server/loans.lua` |
+| `HasActiveLoan` | `citizenid` | `server/loans.lua` |
+| `LockBranch` | `` | `server/lock.lua` |
+| `UnlockBranch` | `` | `server/lock.lua` |
+| `IsBranchLocked` | `` | `server/lock.lua` |
+| `GetLockboxItems` | `citizenid, bankId` | `server/lockbox.lua` |
+| `HasAccount` | `citizenid, bankId` | `server/server.lua` |
+| `GetBranchBalance` | `citizenid, bankId` | `server/server.lua` |
+| `GetTotalBalance` | `citizenid` | `server/server.lua` |
+| `AddBranchMoney` | `citizenid, bankId, amount, note` | `server/server.lua` |
+| `RemoveBranchMoney` | `citizenid, bankId, amount, note` | `server/server.lua` |
+
+```lua
+-- example
+local result = exports['rsg-banking']:GetHomeBranch()
+```
+
+### Events
+
+Server events can be fired by any client, so every handler re-validates the player, the arguments and any permission, distance or cooldown on the server. Never add a reward to a handler without those checks.
+
+| Event | Side | Arguments | File |
+|---|---|---|---|
+| `rsg-banking:client:open` | client | `bankId` | `client/client.lua` |
+| `rsg-banking:client:branchLock` | client | `bankId, locked` | `client/client.lua` |
+| `RSGCore:Client:OnPlayerUnload` | client | `` | `client/client.lua` |
+
+```lua
+-- from a server script
+TriggerClientEvent('rsg-banking:client:open', source, bankId)
+```
+
+### Commands
+
+| Command | Notes | File |
+|---|---|---|
+| `/bankinterestnow` |  | `server/interest.lua` |
+| `/bankwebhooktest` |  | `server/webhooks.lua` |
+
+### Locales
+
+Language files in `locales/`: `de`, `el`, `en`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`. Set the language with `setr rsg:locale "en"`.
+
+<!-- END AUTO-REFERENCE -->

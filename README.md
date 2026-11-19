@@ -179,7 +179,7 @@ Messages are queued and sent one at a time, and Discord rate-limit responses are
 
 ## Languages
 All player-facing text (notifications, prompts and the whole UI) comes from `locales/*.json`.
-Included: `en`, `de`, `el`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`.
+Included: `en`, `de`, `el`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`, `ru`.
 Set the language in server.cfg with rsg-core's convar, e.g. `setr rsg:locale "de"` (falls back to `ox:locale`, then `en`).
 Discord webhook logs and console messages stay in English for staff.
 

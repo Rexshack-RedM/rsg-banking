@@ -77,7 +77,7 @@ Created automatically when `Config.AutoDatabase = true`; otherwise import `insta
 See the README "Server exports" section.
 
 ## Locales
-`locales/*.json` (en, de, el, es, fr, ja, nl, pl, pt-br, ro). Prefixes: `cl_` client, `sv_` server notify, `tx_` ledger notes, `tg_` telegram text, `ui_` NUI (all `ui_*` keys are sent to the NUI on first open).
+`locales/*.json` (en, de, el, es, fr, ja, nl, pl, pt-br, ro, ru). Prefixes: `cl_` client, `sv_` server notify, `tx_` ledger notes, `tg_` telegram text, `ui_` NUI (all `ui_*` keys are sent to the NUI on first open).
 
 ## Console
 - `bankinterestnow` – pays savings interest immediately (console only).
@@ -191,6 +191,6 @@ TriggerClientEvent('rsg-banking:client:open', source, bankId)
 
 ### Locales
 
-Language files in `locales/`: `de`, `el`, `en`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`. Set the language with `setr rsg:locale "en"`.
+Language files in `locales/`: `de`, `el`, `en`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`, `ru`. Set the language with `setr rsg:locale "en"`.
 
 <!-- END AUTO-REFERENCE -->
